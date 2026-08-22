@@ -1,0 +1,75 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>mapy-map-card smoke test</title>
+</head>
+<body style="margin:0;background:#1c1c1c;font-family:sans-serif">
+  <div style="max-width:800px;margin:24px auto">
+    <div id="card"></div>
+    <pre id="result" style="color:#0f0;padding:8px">running...</pre>
+  </div>
+
+  <script src="../dist/mapy-map-card.js"></script>
+  <script>
+    const svgDot =
+      "data:image/svg+xml;base64," +
+      btoa('<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><circle cx="20" cy="20" r="18" fill="#1e88e5"/></svg>');
+
+    const mockHass = {
+      themes: { darkMode: false },
+      states: {
+        "person.tester": {
+          entity_id: "person.tester",
+          state: "home",
+          attributes: { friendly_name: "Tester", latitude: 50.0755, longitude: 14.4378, gps_accuracy: 10 },
+        },
+        "person.mobile": {
+          entity_id: "person.mobile",
+          state: "work",
+          attributes: { friendly_name: "Mobil", latitude: 50.087, longitude: 14.4208, entity_picture: svgDot },
+        },
+        "zone.home": {
+          entity_id: "zone.home",
+          state: "zoning",
+          attributes: { friendly_name: "Home", latitude: 50.087, longitude: 14.4208, radius: 150 },
+        },
+      },
+      connection: {
+        subscribeMessage: async (cb) => {
+          window.__historyCb = cb;
+          return async () => {};
+        },
+      },
+      callService: async () => {},
+    };
+
+    const el = document.createElement("mapy-map-card");
+    el.setConfig({
+      type: "custom:mapy-map-card",
+      api_key: "SMOKE-TEST-KEY",
+      entities: ["person.tester", "person.mobile"],
+      hours_to_show: 24,
+      show_zones: true,
+    });
+    el.hass = mockHass;
+    document.getElementById("card").appendChild(el);
+
+    // simulate a history stream message
+    setTimeout(() => {
+      window.__historyCb?.({
+        locations: [
+          [50.06, 14.41],
+          [50.065, 14.42],
+          [50.07, 14.43],
+          [50.0755, 14.4378],
+        ].map(([lat, lon]) => ({ entity_id: "person.tester", map_state: [lat, lon] })),
+      });
+    }, 800);
+
+    // expose for console experiments
+    window.__card = el;
+    window.__mockHass = mockHass;
+  </script>
+</body>
+</html>

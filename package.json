@@ -1,0 +1,31 @@
+{
+  "name": "mapy-map-card",
+  "version": "0.1.0",
+  "description": "Home Assistant Lovelace map card powered by Mapy.com tiles",
+  "type": "module",
+  "main": "dist/mapy-map-card.js",
+  "scripts": {
+    "build": "tsc --noEmit && node build.mjs",
+    "watch": "node build.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "node test/run-node.mjs"
+  },
+  "keywords": [
+    "home-assistant",
+    "lovelace",
+    "custom-cards",
+    "mapy.com",
+    "map"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "leaflet": "^1.9.4",
+    "lit": "^3.3.0"
+  },
+  "devDependencies": {
+    "@types/leaflet": "^1.9.12",
+    "esbuild": "^0.25.0",
+    "jsdom": "^30.0.1",
+    "typescript": "^5.6.0"
+  }
+}
