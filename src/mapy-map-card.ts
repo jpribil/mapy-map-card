@@ -13,6 +13,7 @@ import {
   getLocationEntities,
   isDarkMode,
   normalizeEntities,
+  parseHistoryDuringPeriod,
 } from "./utils";
 
 const TILE_MAX_NATIVE_ZOOM: Record<string, number> = {
@@ -41,11 +42,24 @@ export class MapyMapCard extends LitElement {
   private _markers = new Map<string, L.Marker>();
   private _history = new Map<string, [number, number][]>();
   private _unsubHistory?: Promise<() => void>;
+  private _historyStreamDataReceived = false;
+  private _historyFallbackTimer?: ReturnType<typeof setTimeout>;
   private _historyKey = "";
   private _zonesKey = "";
   private _appliedFitKey = "";
   private _pendingFit?: { key: string; bounds: L.LatLngBounds };
   private _resizeObserver?: ResizeObserver;
+  private _onVisibilityChange = () => {
+    // when the tab/dashboard becomes visible again Leaflet may need a kick
+    if (document.visibilityState === "visible") {
+      this._map?.invalidateSize({ pan: false });
+      this._applyFit();
+      this._healthCheck();
+    }
+  };
+  private _onWindowResize = () => {
+    this._map?.invalidateSize({ pan: false });
+  };
 
   public static async getConfigElement(): Promise<HTMLElement> {
     await import("./editor");
@@ -96,6 +110,8 @@ export class MapyMapCard extends LitElement {
     this._teardownHistory();
     this._resizeObserver?.disconnect();
     this._resizeObserver = undefined;
+    document.removeEventListener("visibilitychange", this._onVisibilityChange);
+    window.removeEventListener("resize", this._onWindowResize);
     this._map?.remove();
     this._map = undefined;
     this._markers.clear();
@@ -154,9 +170,12 @@ export class MapyMapCard extends LitElement {
 
     this._map = L.map(container, {
       zoomControl: true,
-      attributionControl: true,
+      attributionControl: false,
       worldCopyJump: true,
     });
+
+    // layer attributions (Mapy.com / Seznam) without the default "Leaflet" link
+    L.control.attribution({ prefix: false }).addTo(this._map);
 
     this._zoneLayer = L.layerGroup().addTo(this._map);
     this._historyLayer = L.layerGroup().addTo(this._map);
@@ -169,6 +188,9 @@ export class MapyMapCard extends LitElement {
       this._applyFit();
     });
     this._resizeObserver.observe(container);
+
+    document.addEventListener("visibilitychange", this._onVisibilityChange);
+    window.addEventListener("resize", this._onWindowResize);
 
     // Set an initial view right away – until the map "loads" (first setView),
     // Leaflet queues every added layer and renders nothing.
@@ -193,6 +215,32 @@ export class MapyMapCard extends LitElement {
     );
 
     this._updateTileLayer();
+
+    // First render of the dashboard can race with card initialization
+    // (zero-size container, throttled layout, lazy panels). Re-check a few
+    // times and kick Leaflet if tiles or markers did not appear.
+    for (const delay of [300, 1000, 3000, 8000]) {
+      setTimeout(() => this._healthCheck(), delay);
+    }
+  }
+
+  private _healthCheck(): void {
+    if (!this._map || !this.isConnected) return;
+    try {
+      const container = this._map.getContainer();
+      if (!container.clientWidth || !container.clientHeight) return;
+      if (container.querySelectorAll("img.leaflet-tile").length === 0) {
+        this._map.invalidateSize({ pan: false });
+        this._applyFit();
+      }
+      const hasMarkers = Array.from(this._markers.values()).some((m) => !!m.getIcon());
+      const rendered = container.querySelectorAll(".leaflet-marker-pane .mmc-dot, .leaflet-marker-pane .mmc-picture-icon");
+      if (hasMarkers && rendered.length < this._markers.size) {
+        this._processHass();
+      }
+    } catch {
+      // never let the watchdog break the map
+    }
   }
 
   private _updateTileLayer(): void {
@@ -354,6 +402,11 @@ export class MapyMapCard extends LitElement {
 
   private _resetHistory(): void {
     this._teardownHistory();
+    if (this._historyFallbackTimer !== undefined) {
+      clearTimeout(this._historyFallbackTimer);
+      this._historyFallbackTimer = undefined;
+    }
+    this._historyStreamDataReceived = false;
     this._history = new Map();
     this._historyKey = "";
     this._historyLayer?.clearLayers();
@@ -379,14 +432,57 @@ export class MapyMapCard extends LitElement {
     this._resetHistory();
     this._historyKey = key;
 
-    this._unsubHistory = subscribeHistoryStream(this.hass!, ids, hours, (locations) =>
-      this._onHistoryLocations(locations)
-    ).catch(() => {
-      // history integration unavailable or subscription rejected
+    this._unsubHistory = subscribeHistoryStream(this.hass!, ids, hours, (locations) => {
+      this._onHistoryLocations(locations);
+      this._historyStreamDataReceived = true;
+    }    ).catch(() => {
+      // history integration unavailable or subscription rejected –
+      // fall back to a one-shot query so trails still render
       this._unsubHistory = undefined;
-      this._historyKey = "";
-      return undefined as unknown as () => void;
+      this._fetchHistoryFallback(ids, hours);
+      return () => {};
     });
+
+    // If the stream stays silent for a while (e.g. recorder restarted,
+    // subscription dropped silently), load the trail once via REST-style query.
+    if (!this._historyFallbackTimer) {
+      this._historyFallbackTimer = setTimeout(() => {
+        this._historyFallbackTimer = undefined;
+        if (!this._historyStreamDataReceived && this.isConnected) {
+          this._fetchHistoryFallback(ids, hours);
+        }
+      }, 8000);
+    }
+  }
+
+  private _fetchHistoryFallback(entityIds: string[], hours: number): void {
+    try {
+      const conn = this.hass?.connection;
+      if (!conn) return;
+      const startTime = new Date(Date.now() - hours * 3600 * 1000).toISOString();
+      conn
+        .sendMessagePromise({
+          type: "history/history_during_period",
+          start_time: startTime,
+          end_time: new Date().toISOString(),
+          entity_ids: entityIds,
+          minimal_response: true,
+          no_attributes: false,
+          significant_changes_only: true,
+        })
+        .then((data: unknown) => {
+          const locations = parseHistoryDuringPeriod(data as Record<string, unknown>, entityIds);
+          if (locations.length > 0) {
+            this._onHistoryLocations(locations);
+            this._historyStreamDataReceived = true;
+          }
+        })
+        .catch(() => {
+          // recorder unavailable – stay with live positions only
+        });
+    } catch {
+      // never break rendering because of history issues
+    }
   }
 
   private _onHistoryLocations(locations: HistoryStreamLocation[]): void {

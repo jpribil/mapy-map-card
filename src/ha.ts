@@ -36,6 +36,7 @@ export interface HAConnection {
     subscribeMessage: Record<string, any>,
     options?: SubscribeMessageOptions
   ): Promise<Unsubscribe>;
+  sendMessagePromise<T = unknown>(message: Record<string, any>): Promise<T>;
 }
 
 export interface HomeAssistant {

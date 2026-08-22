@@ -60,3 +60,39 @@ export function isDarkMode(hass: HomeAssistant, mode?: string): boolean {
   if (mode === "light") return false;
   return !!hass.themes?.darkMode;
 }
+
+/**
+ * Parse the reply of the `history/history_during_period` websocket command.
+ * The recorder returns per-entity lists whose items differ depending on
+ * `minimal_response`; handle all shapes tolerantly.
+ */
+export function parseHistoryDuringPeriod(
+  data: Record<string, unknown> | undefined | null,
+  entityIds: string[]
+): Array<{ entity_id: string; map_state: [number, number] }> {
+  const out: Array<{ entity_id: string; map_state: [number, number] }> = [];
+  if (!data || typeof data !== "object") return out;
+
+  for (const entityId of entityIds) {
+    const states = (data as Record<string, unknown>)[entityId];
+    if (!Array.isArray(states)) continue;
+
+    let last: [number, number] | null = null;
+    for (const item of states) {
+      let attrs: any = null;
+      if (Array.isArray(item)) {
+        attrs = item[1];
+      } else if (item && typeof item === "object") {
+        const obj = item as Record<string, any>;
+        attrs = obj.a ?? obj.attributes ?? obj;
+      }
+      const lat = Number(attrs?.latitude);
+      const lon = Number(attrs?.longitude);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+      if (last && last[0] === lat && last[1] === lon) continue;
+      last = [lat, lon];
+      out.push({ entity_id: entityId, map_state: last });
+    }
+  }
+  return out;
+}
