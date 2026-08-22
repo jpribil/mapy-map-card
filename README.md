@@ -18,14 +18,14 @@ Lovelace karta pro [Home Assistant](https://www.home-assistant.io/), která nahr
 
 ### HACS (doporučeno)
 
-1. Přidejte tento repozitář do HACS: **HACS → Lovelace → Custom repositories**
-2. Jako kategorii zvolte *Lovelace* a vložte URL repozitáře
+1. Přidejte tento repozitář do HACS: **HACS → ⋮ (nabídka) → Custom repositories**
+2. URL: `https://github.com/jpribil/mapy-map-card`, kategorie *Lovelace*
 3. Nainstalujte **Mapy.com Map Card**
 4. Obnovte prohlížeč (Ctrl+F5)
 
 ### Ruční instalace
 
-Zkopírujte `dist/mapy-map-card.js` do `config/www/`:
+Stáhněte [poslední release](https://github.com/jpribil/mapy-map-card/releases) a zkopírujte `mapy-map-card.js` do `config/www/`:
 
 ```
 config/

@@ -1,4 +1,5 @@
 {
   "name": "Mapy.com Map Card",
-  "render_readme": true
+  "render_readme": true,
+  "filename": "mapy-map-card.js"
 }

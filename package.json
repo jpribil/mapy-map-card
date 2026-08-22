@@ -17,6 +17,11 @@
     "mapy.com",
     "map"
   ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jpribil/mapy-map-card"
+  },
+  "author": "Jiří Přibíl",
   "license": "MIT",
   "dependencies": {
     "leaflet": "^1.9.4",

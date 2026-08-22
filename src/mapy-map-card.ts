@@ -170,6 +170,28 @@ export class MapyMapCard extends LitElement {
     });
     this._resizeObserver.observe(container);
 
+    // Set an initial view right away – until the map "loads" (first setView),
+    // Leaflet queues every added layer and renders nothing.
+    const hassCoords = this.hass?.config;
+    let center: L.LatLngTuple | undefined =
+      typeof hassCoords?.latitude === "number" && typeof hassCoords?.longitude === "number"
+        ? [hassCoords.latitude, hassCoords.longitude]
+        : undefined;
+    if (!center) {
+      for (const st of Object.values(this.hass?.states ?? {})) {
+        const pos = entityPosition(st);
+        if (pos) {
+          center = [pos.lat, pos.lon];
+          break;
+        }
+      }
+    }
+    this._map.setView(
+      center ?? [49.8032, 15.4811],
+      this._config?.default_zoom ?? 12,
+      { animate: false }
+    );
+
     this._updateTileLayer();
   }
 
