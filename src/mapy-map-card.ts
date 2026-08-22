@@ -104,10 +104,25 @@ export class MapyMapCard extends LitElement {
 
   public override connectedCallback(): void {
     super.connectedCallback();
+    // Lit calls firstUpdated only once per element lifetime. When HA
+    // re-attaches the card (dashboard edit, view switch, tab restore) the map
+    // must be rebuilt manually, otherwise it stays empty until page reload.
+    if (this._config && !this._error && !this._map) {
+      this.updateComplete.then(() => {
+        if (this.isConnected && this._config && !this._map && !this._error) {
+          this._initMap();
+          this._processHass();
+        }
+      });
+    }
   }
 
   public override disconnectedCallback(): void {
-    this._teardownHistory();
+    // full reset – after re-attach everything must be re-created and
+    // the history subscription re-established
+    this._resetHistory();
+    this._appliedFitKey = "";
+    this._pendingFit = undefined;
     this._resizeObserver?.disconnect();
     this._resizeObserver = undefined;
     document.removeEventListener("visibilitychange", this._onVisibilityChange);
@@ -137,7 +152,7 @@ export class MapyMapCard extends LitElement {
 
   protected override firstUpdated(): void {
     if (this._error) return;
-    this._initMap();
+    if (!this._map) this._initMap();
     this._processHass();
   }
 
@@ -467,7 +482,6 @@ export class MapyMapCard extends LitElement {
           end_time: new Date().toISOString(),
           entity_ids: entityIds,
           minimal_response: true,
-          no_attributes: false,
           significant_changes_only: true,
         })
         .then((data: unknown) => {

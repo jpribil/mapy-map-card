@@ -13,7 +13,7 @@ window.customCards.push({
 });
 
 console.info(
-  "%c MAPY-MAP-CARD %c v0.2.0 ",
+  "%c MAPY-MAP-CARD %c v0.2.1 ",
   "color: white; background: #c83737; font-weight: 700;",
   "color: white; background: #333; font-weight: 700;",
   "\nhttps://github.com/jpribil/mapy-map-card"

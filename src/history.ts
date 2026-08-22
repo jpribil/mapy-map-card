@@ -24,7 +24,6 @@ export async function subscribeHistoryStream(
       type: "history/history_stream",
       start_time: startTime,
       entity_ids: entityIds,
-      pretty_print: false,
     },
     { resubscribe: true }
   );
