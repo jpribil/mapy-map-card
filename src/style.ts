@@ -140,4 +140,47 @@ ha-card {
   background: rgba(60, 60, 60, 0.9);
   color: #fff;
 }
+
+/* --- tile style switcher --- */
+
+.leaflet-control-layers-toggle,
+.leaflet-retina .leaflet-control-layers-toggle {
+  background-image: none !important;
+}
+
+.leaflet-control-layers-toggle::before {
+  content: "";
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: no-repeat center / 18px
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23333' stroke-width='1.8' stroke-linejoin='round' stroke-linecap='round'><polygon points='12 2 21 7 12 12 3 7'/><polyline points='3 12 12 17 21 12'/><polyline points='3 17 12 22 21 17'/></svg>");
+}
+
+.leaflet-control-layers-expanded {
+  font-size: 12px;
+  padding: 8px 10px;
+}
+
+.leaflet-control-layers label {
+  font-size: 12px;
+  margin: 3px 0;
+}
+
+.mmc-dark .leaflet-control-layers-toggle {
+  background-color: rgba(30, 30, 30, 0.85);
+}
+
+.mmc-dark .leaflet-control-layers-toggle::before {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ddd' stroke-width='1.8' stroke-linejoin='round' stroke-linecap='round'><polygon points='12 2 21 7 12 12 3 7'/><polyline points='3 12 12 17 21 12'/><polyline points='3 17 12 22 21 17'/></svg>");
+}
+
+.mmc-dark .leaflet-control-layers-expanded {
+  background: rgba(30, 30, 30, 0.92);
+  color: #ddd;
+}
+
+.mmc-dark .leaflet-control-layers-separator {
+  border-top-color: rgba(255, 255, 255, 0.2);
+}
 `;

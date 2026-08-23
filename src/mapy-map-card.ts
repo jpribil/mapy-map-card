@@ -10,9 +10,12 @@ import {
   HistoryPoint,
   HistoryPointType,
   HistoryStreamLocation,
+  TileStyle,
 } from "./types";
 import type { HassState, HomeAssistant } from "./ha";
 import {
+  TILE_STYLES,
+  TILE_STYLE_LABELS,
   entityPosition,
   friendlyName,
   getLocationEntities,
@@ -22,7 +25,7 @@ import {
 } from "./utils";
 import { parseHistoryStates } from "./history";
 
-const TILE_MAX_NATIVE_ZOOM: Record<string, number> = {
+const TILE_MAX_NATIVE_ZOOM: Record<TileStyle, number> = {
   basic: 19,
   outdoor: 19,
   winter: 19,
@@ -42,6 +45,10 @@ export class MapyMapCard extends LitElement {
   private _map?: L.Map;
   private _tileLayer?: L.TileLayer;
   private _tileUrl?: string;
+  private _tileStyleLayers?: Partial<Record<TileStyle, L.TileLayer>>;
+  private _tileSwitchKey = "";
+  private _appliedTileStyle?: TileStyle;
+  private _layersControl?: L.Control.Layers;
   private _markerLayer?: L.LayerGroup;
   private _zoneLayer?: L.LayerGroup;
   private _historyLayer?: L.LayerGroup;
@@ -98,7 +105,7 @@ export class MapyMapCard extends LitElement {
       fit_bounds: true,
       theme_mode: "auto",
       tile_style: "basic",
-      aspect_ratio: "16:9",
+      aspect_ratio: "1:1",
       ...config,
     };
 
@@ -138,6 +145,10 @@ export class MapyMapCard extends LitElement {
     this._map = undefined;
     this._tileLayer = undefined;
     this._tileUrl = undefined;
+    this._tileStyleLayers = undefined;
+    this._tileSwitchKey = "";
+    this._appliedTileStyle = undefined;
+    this._layersControl = undefined;
     this._zonesKey = "";
     this._markers.clear();
     this._markerColors.clear();
@@ -269,28 +280,91 @@ export class MapyMapCard extends LitElement {
     }
   }
 
+  /** Mapy.com tile URL for one style, given a already-trimmed API key/language. */
+  private _tileStyleUrl(style: TileStyle, apiKey: string, lang: string): string {
+    return (
+      `https://api.mapy.com/v1/maptiles/${style}/256/{z}/{x}/{y}?apikey=${encodeURIComponent(apiKey)}` +
+      (lang ? `&lang=${encodeURIComponent(lang)}` : "")
+    );
+  }
+
+  private _teardownStyleSwitcher(): void {
+    if (this._layersControl) {
+      this._map?.removeControl(this._layersControl);
+      this._layersControl = undefined;
+    }
+    if (this._tileStyleLayers) {
+      for (const layer of Object.values(this._tileStyleLayers)) {
+        if (layer && this._map?.hasLayer(layer)) this._map.removeLayer(layer);
+      }
+      this._tileStyleLayers = undefined;
+    }
+    this._tileSwitchKey = "";
+    this._appliedTileStyle = undefined;
+  }
+
   private _updateTileLayer(): void {
     if (!this._map || !this._config) return;
     const cfg = this._config;
-    const apiKey = cfg.api_key?.trim();
-    const style = cfg.tile_style ?? "basic";
+    const customUrl = cfg.tile_url?.trim();
 
-    const url =
-      cfg.tile_url?.trim() ||
-      `https://api.mapy.com/v1/maptiles/${style}/256/{z}/{x}/{y}?apikey=${encodeURIComponent(apiKey!)}` +
-        (cfg.language?.trim() ? `&lang=${encodeURIComponent(cfg.language.trim())}` : "");
-    if (url === this._tileUrl) return;
-    this._tileUrl = url;
-
-    if (this._tileLayer) {
-      this._map.removeLayer(this._tileLayer);
+    if (customUrl) {
+      this._teardownStyleSwitcher();
+      if (customUrl === this._tileUrl) return;
+      this._tileUrl = customUrl;
+      if (this._tileLayer) this._map.removeLayer(this._tileLayer);
+      this._tileLayer = L.tileLayer(customUrl, {
+        attribution: cfg.tile_attribution ?? DEFAULT_TILE_ATTRIBUTION,
+        maxZoom: 21,
+        maxNativeZoom: 19,
+      });
+      this._tileLayer.addTo(this._map);
+      return;
     }
-    this._tileLayer = L.tileLayer(url, {
-      attribution: cfg.tile_attribution ?? DEFAULT_TILE_ATTRIBUTION,
-      maxZoom: 21,
-      maxNativeZoom: cfg.tile_url ? 19 : TILE_MAX_NATIVE_ZOOM[style] ?? 19,
-    });
-    this._tileLayer.addTo(this._map);
+
+    const apiKey = cfg.api_key?.trim();
+    if (!apiKey) return;
+    const lang = cfg.language?.trim() ?? "";
+    const switchKey = `${apiKey}|${lang}|${cfg.tile_attribution ?? ""}`;
+    const wantedStyle: TileStyle = cfg.tile_style ?? "basic";
+
+    // api key / language changed (or first run) -> (re)build every style as a
+    // switchable base layer and add the unobtrusive top-right style control
+    if (switchKey !== this._tileSwitchKey) {
+      this._teardownStyleSwitcher();
+      this._tileSwitchKey = switchKey;
+
+      const layers: Partial<Record<TileStyle, L.TileLayer>> = {};
+      for (const style of TILE_STYLES) {
+        layers[style] = L.tileLayer(this._tileStyleUrl(style, apiKey, lang), {
+          attribution: cfg.tile_attribution ?? DEFAULT_TILE_ATTRIBUTION,
+          maxZoom: 21,
+          maxNativeZoom: TILE_MAX_NATIVE_ZOOM[style] ?? 19,
+        });
+      }
+      this._tileStyleLayers = layers;
+
+      const named: Record<string, L.Layer> = {};
+      for (const style of TILE_STYLES) named[TILE_STYLE_LABELS[style]] = layers[style]!;
+      this._layersControl = L.control
+        .layers(named, undefined, { position: "topright", collapsed: true })
+        .addTo(this._map);
+
+      this._tileLayer = undefined;
+    }
+
+    // switch the active base layer whenever the configured style changes
+    // (a style picked live via the control is left alone otherwise)
+    if (this._appliedTileStyle !== wantedStyle) {
+      this._appliedTileStyle = wantedStyle;
+      const next = this._tileStyleLayers?.[wantedStyle];
+      if (next && next !== this._tileLayer) {
+        if (this._tileLayer) this._map.removeLayer(this._tileLayer);
+        next.addTo(this._map);
+        this._tileLayer = next;
+      }
+    }
+    this._tileUrl = this._tileStyleUrl(wantedStyle, apiKey, lang);
   }
 
   private _processHass(): void {

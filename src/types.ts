@@ -9,7 +9,7 @@ export interface EntityConfig {
 
 export type EntityConfigOrString = string | EntityConfig;
 
-export type TileStyle = "basic" | "outdoor" | "aerial";
+export type TileStyle = "basic" | "outdoor" | "winter" | "aerial";
 
 export interface CardConfig {
   type: string;

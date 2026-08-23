@@ -1,5 +1,14 @@
-import type { CardConfig, EntityConfig, EntityConfigOrString } from "./types";
+import type { CardConfig, EntityConfig, EntityConfigOrString, TileStyle } from "./types";
 import type { HassState, HomeAssistant } from "./ha";
+
+export const TILE_STYLES: TileStyle[] = ["basic", "outdoor", "winter", "aerial"];
+
+export const TILE_STYLE_LABELS: Record<TileStyle, string> = {
+  basic: "Basic",
+  outdoor: "Outdoor",
+  winter: "Winter",
+  aerial: "Aerial",
+};
 
 export const PALETTE = [
   "#e53935",

@@ -10,6 +10,7 @@ A [Home Assistant](https://www.home-assistant.io/) Lovelace card that replaces t
 - 👤 Entities with GPS position (`person`, `device_tracker`, `geo_location`, …) – including picture markers based on `entity_picture`
 - 〰️ **Location history** via the `history/history_stream` WebSocket API (same mechanism as the built-in map card), with a one-shot `history/history_during_period` fallback
 - ⭕ **Zones** with radius; passive zones shown in gray
+- 🗂️ Unobtrusive tile style switcher (top-right corner) to flip between basic/outdoor/winter/aerial live, without editing the config
 - 🎨 Dark mode (`auto` follows the HA theme), automatic fit bounds
 - 🛠️ GUI editor with entity picker (uses `ha-entity-picker`)
 - Clicking a marker opens the standard *more-info* dialog
@@ -37,7 +38,7 @@ and register it in your dashboard configuration (YAML or *Raw editor*):
 
 ```yaml
 resources:
-  - url: /local/mapy-map-card.js?v=0.3.1
+  - url: /local/mapy-map-card.js?v=0.3.2
     type: module
 ```
 
@@ -61,7 +62,7 @@ resources:
 | `theme_mode` | `auto`/`light`/`dark` | `auto` | Tile dark mode |
 | `tile_style` | `basic`/`outdoor`/`winter`/`aerial` | `basic` | Mapy.com tile style |
 | `language` | string | auto | Map label language (`cs`, `en`, `de`, …) – the API `lang` parameter |
-| `aspect_ratio` | string | `16:9` | Aspect ratio (`16:9`, `4:3`, `1:1`) or a CSS height value (`400px`) |
+| `aspect_ratio` | string | `1:1` | Aspect ratio (`1:1`, `16:9`, `4:3`, …) or a CSS height value (`400px`) |
 | `default_zoom` | number | `14` | Zoom for a single position / max zoom when fitting bounds |
 | `fit_bounds` | bool | `true` | Automatically fit the viewport to all points |
 | `title` | string | – | Card title |

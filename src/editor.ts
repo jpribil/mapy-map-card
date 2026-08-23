@@ -3,7 +3,7 @@ import { customElement, property, state } from "lit/decorators.js";
 
 import { CardConfig, EntityConfig, EntityConfigOrString, HistoryPointType, TileStyle } from "./types";
 import type { HomeAssistant } from "./ha";
-import { normalizeEntities, resolveEntityColor } from "./utils";
+import { TILE_STYLES, normalizeEntities, resolveEntityColor } from "./utils";
 
 let pickerPromise: Promise<boolean> | null = null;
 
@@ -174,7 +174,7 @@ export class MapyMapCardEditor extends LitElement {
           <select
             @change=${(e: Event) => this._patch({ tile_style: (e.target as HTMLSelectElement).value as TileStyle })}
           >
-            ${(["basic", "outdoor", "winter", "aerial"] as TileStyle[]).map(
+            ${TILE_STYLES.map(
               (style) => html`<option value=${style} ?selected=${(cfg.tile_style ?? "basic") === style}>${style}</option>`
             )}
           </select>
@@ -205,10 +205,10 @@ export class MapyMapCardEditor extends LitElement {
         </label>
 
         <label>
-          Aspect ratio (e.g. 16:9) or height
+          Aspect ratio (e.g. 1:1) or height
           <input
             type="text"
-            placeholder="16:9"
+            placeholder="1:1"
             .value=${cfg.aspect_ratio ?? ""}
             @input=${(e: InputEvent) => this._patch({ aspect_ratio: (e.target as HTMLInputElement).value || undefined })}
           />

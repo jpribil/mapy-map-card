@@ -92,6 +92,12 @@ const root = el.shadowRoot;
 ok("shadow rendered", !!root);
 ok("leaflet container", !!root?.querySelector(".mmc-map.leaflet-container"));
 ok("tile layer src uses mapy.com api v1", !!root?.querySelector('img.leaflet-tile[src*="api.mapy.com/v1/maptiles/basic"]'));
+ok("tile style switcher control rendered", !!root?.querySelector(".leaflet-control-layers"));
+ok("tile style switcher starts collapsed", !root?.querySelector(".leaflet-control-layers-expanded"));
+ok(
+  "tile style switcher lists all styles",
+  [...(root?.querySelectorAll(".leaflet-control-layers-list label") ?? [])].length === 4
+);
 ok("marker dot for person.tester", !!root?.querySelector(".mmc-dot"));
 ok("picture icon for person.mobile", !!root?.querySelector("img.mmc-picture-icon"));
 ok("permanent label Tester", [...(root?.querySelectorAll(".leaflet-tooltip") ?? [])].some((t) => t.textContent === "Tester"));
