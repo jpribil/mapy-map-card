@@ -49,7 +49,7 @@ export class MapyMapCardEditor extends LitElement {
 
   @state() private _config: CardConfig = { type: CARD_TYPE };
   @state() private _pickerReady = false;
-  @state() private _cacheStats = getTileCacheStats();
+  @state() private _cacheStats = { tileCount: 0, sizeMb: 0, hits: 0, misses: 0 };
 
   public setConfig(config: CardConfig): void {
     this._config = { ...config };
@@ -60,12 +60,16 @@ export class MapyMapCardEditor extends LitElement {
     loadEntityPicker().then((ok) => {
       this._pickerReady = ok;
     });
-    this._cacheStats = getTileCacheStats();
+    this._refreshCacheStats();
+  }
+
+  private async _refreshCacheStats(): Promise<void> {
+    this._cacheStats = await getTileCacheStats();
   }
 
   private async _clearTileCache(): Promise<void> {
     await clearTileCache();
-    this._cacheStats = getTileCacheStats();
+    await this._refreshCacheStats();
   }
 
   protected override render(): TemplateResult {
@@ -347,9 +351,7 @@ export class MapyMapCardEditor extends LitElement {
         <div class="hint full cache-stats">
           Cached: ${this._cacheStats.tileCount} tiles (~${this._cacheStats.sizeMb} MB) · Hits:
           ${this._cacheStats.hits} · Misses: ${this._cacheStats.misses}
-          <button class="btn" type="button" @click=${() => (this._cacheStats = getTileCacheStats())}>
-            Refresh
-          </button>
+          <button class="btn" type="button" @click=${() => this._refreshCacheStats()}>Refresh</button>
           <button class="btn" type="button" @click=${() => this._clearTileCache()}>Clear cache</button>
         </div>
 
