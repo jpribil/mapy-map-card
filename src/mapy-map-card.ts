@@ -136,6 +136,9 @@ export class MapyMapCard extends LitElement {
     window.removeEventListener("resize", this._onWindowResize);
     this._map?.remove();
     this._map = undefined;
+    this._tileLayer = undefined;
+    this._tileUrl = undefined;
+    this._zonesKey = "";
     this._markers.clear();
     this._markerColors.clear();
     super.disconnectedCallback();

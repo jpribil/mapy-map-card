@@ -37,7 +37,7 @@ and register it in your dashboard configuration (YAML or *Raw editor*):
 
 ```yaml
 resources:
-  - url: /local/mapy-map-card.js?v=0.1.1
+  - url: /local/mapy-map-card.js?v=0.3.1
     type: module
 ```
 
