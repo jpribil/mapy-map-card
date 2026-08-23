@@ -152,6 +152,21 @@ await tick(100);
 const overlayPaths = root.querySelectorAll(".leaflet-overlay-pane path").length;
 ok("polyline + zone overlays present", overlayPaths >= 2);
 
+// --- trail line/points fade with age instead of a fixed opacity (no config option)
+const trailSegments = [...root.querySelectorAll(".leaflet-overlay-pane path:not(.leaflet-interactive)")];
+ok("one polyline segment per pair of trail points", trailSegments.length === 3);
+const segOpacities = trailSegments.map((p) => Number(p.getAttribute("stroke-opacity")));
+ok("oldest trail segment is nearly transparent", segOpacities[0] < 0.1);
+ok("newest trail segment reaches opacity 0.75", Math.abs(segOpacities[segOpacities.length - 1] - 0.75) < 0.01);
+ok(
+  "trail segments fade in with age",
+  segOpacities.every((o, i) => i === 0 || o > segOpacities[i - 1])
+);
+const trailDots = [...root.querySelectorAll(".leaflet-overlay-pane path.leaflet-interactive")].slice(1); // drop zone circle
+const dotOpacities = trailDots.map((p) => Number(p.getAttribute("fill-opacity")));
+ok("oldest trail point is nearly transparent", dotOpacities[0] < 0.1);
+ok("newest trail point reaches opacity 0.75", Math.abs(dotOpacities[dotOpacities.length - 1] - 0.75) < 0.01);
+
 // --- trail points rendered as hoverable dots with time tooltips
 let interactivePaths = root.querySelectorAll(".leaflet-overlay-pane path.leaflet-interactive");
 // zone circle (1) + 4 trail dots

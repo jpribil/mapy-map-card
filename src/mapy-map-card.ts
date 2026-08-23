@@ -35,6 +35,9 @@ const TILE_MAX_NATIVE_ZOOM: Record<TileStyle, number> = {
 const DEFAULT_TILE_ATTRIBUTION =
   '&copy; <a href="https://mapy.com/">Mapy.com</a> &copy; <a href="https://www.seznam.cz/">Seznam.cz, a.s.</a>';
 
+const HISTORY_TRAIL_MIN_OPACITY = 0.05;
+const HISTORY_TRAIL_MAX_OPACITY = 0.75;
+
 const HISTORY_RANGE_OPTIONS: Array<{ label: string; hours: number }> = [
   { label: "24 h", hours: 24 },
   { label: "12 h", hours: 12 },
@@ -779,13 +782,18 @@ export class MapyMapCard extends LitElement {
     this._renderHistory();
   }
 
+  /** Age-based opacity: oldest ~0, newest fixed at 0.75 (matches the built-in map card). */
+  private _fadeOpacity(index: number, count: number): number {
+    const weight = count > 1 ? index / (count - 1) : 1;
+    return HISTORY_TRAIL_MIN_OPACITY + (HISTORY_TRAIL_MAX_OPACITY - HISTORY_TRAIL_MIN_OPACITY) * weight;
+  }
+
   private _renderHistory(): void {
     const layer = this._historyLayer!;
     layer.clearLayers();
     const cfg = this._config!;
 
     const lineWidth = Math.max(1, Number(cfg.history_line_width ?? 4));
-    const lineOpacity = Math.min(1, Math.max(0.05, Number(cfg.history_line_opacity ?? 0.65)));
     const pointType: HistoryPointType = cfg.history_point_type ?? "dot";
 
     this._resolvedEntities().forEach((ent, index) => {
@@ -796,20 +804,32 @@ export class MapyMapCard extends LitElement {
       const lineColor = cfg.history_line_color?.trim() || entityColor;
       const pointColor = cfg.history_point_color?.trim() || entityColor;
 
-      L.polyline(
-        points.map((p) => [p.lat, p.lon] as L.LatLngTuple),
-        { color: lineColor, weight: lineWidth, opacity: lineOpacity, interactive: false }
-      ).addTo(layer);
+      // one polyline per segment so each can fade in with its own opacity
+      for (let i = 1; i < points.length; i++) {
+        L.polyline(
+          [
+            [points[i - 1].lat, points[i - 1].lon],
+            [points[i].lat, points[i].lon],
+          ],
+          {
+            color: lineColor,
+            weight: lineWidth,
+            opacity: this._fadeOpacity(i - 1, points.length - 1),
+            interactive: false,
+          }
+        ).addTo(layer);
+      }
 
       if (pointType === "none") return;
 
-      for (const p of points) {
+      points.forEach((p, i) => {
+        const pointOpacity = this._fadeOpacity(i, points.length);
         let overlay: L.Layer | undefined;
         if (pointType === "square") {
           overlay = L.marker([p.lat, p.lon], {
             icon: L.divIcon({
               className: "mmc-icon-wrapper",
-              html: `<span class="mmc-trail-square" style="background:${pointColor}"></span>`,
+              html: `<span class="mmc-trail-square" style="background:${pointColor};opacity:${pointOpacity}"></span>`,
               iconSize: [8, 8],
               iconAnchor: [4, 4],
             }),
@@ -821,7 +841,7 @@ export class MapyMapCard extends LitElement {
             color: pointColor,
             weight: 2,
             fill: false,
-            opacity: 1,
+            opacity: pointOpacity,
           });
         } else {
           overlay = L.circleMarker([p.lat, p.lon], {
@@ -829,8 +849,8 @@ export class MapyMapCard extends LitElement {
             color: "#ffffff",
             weight: 1,
             fillColor: pointColor,
-            fillOpacity: 1,
-            opacity: 1,
+            fillOpacity: pointOpacity,
+            opacity: pointOpacity,
           });
         }
 
@@ -842,7 +862,7 @@ export class MapyMapCard extends LitElement {
           });
         }
         overlay.addTo(layer);
-      }
+      });
     });
   }
 

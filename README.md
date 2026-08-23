@@ -39,7 +39,7 @@ and register it in your dashboard configuration (YAML or *Raw editor*):
 
 ```yaml
 resources:
-  - url: /local/mapy-map-card.js?v=0.3.4
+  - url: /local/mapy-map-card.js?v=0.3.5
     type: module
 ```
 
@@ -69,7 +69,6 @@ resources:
 | `title` | string | – | Card title |
 | `entity_colors` | map | – | Per-entity color override, e.g. `person.joe: "#e53935"`. Applies to the position marker and its history trail |
 | `history_line_width` | number | `4` | History trail line width in px |
-| `history_line_opacity` | number | `0.65` | History trail line opacity (0.1–1) |
 | `history_line_color` | color | entity color | Fixed trail line color for all entities |
 | `history_point_color` | color | entity color | Fixed trail point color for all entities |
 | `history_point_type` | `dot`/`ring`/`square`/`none` | `dot` | Style of the trail points; hovering a point shows its date & time |
@@ -113,7 +112,6 @@ entity_colors:
   person.tomas: "#1e88e5"
   person.jana: "#e53935"
 history_line_width: 5
-history_line_opacity: 0.8
 # history_line_color: "#ff9800"   # one line color for everyone
 # history_point_color: "#ff9800"  # one point color for everyone
 history_point_type: dot           # dot | ring | square | none
@@ -122,6 +120,7 @@ history_point_type: dot           # dot | ring | square | none
 ## Notes
 
 - Location history requires the **Recorder** integration (enabled by default).
+- The trail line and points fade with age (like the built-in map card) – oldest segments/points are nearly transparent, the newest reach opacity 0.75. Not configurable.
 - The `aerial` style is experimental – it requires the aerial imagery product to be enabled for your project at developer.mapy.com; if tiles are missing, use `basic`/`outdoor`.
 - Using the API key means you agree to the [Mapy.com API terms](https://developer.mapy.com/).
 - Live picks from the tile style / history range switchers are saved to the browser's `localStorage`, keyed by the card's entities + title – they're per-browser, not written back into the dashboard's YAML/storage config, so they don't carry over to other devices or viewers.

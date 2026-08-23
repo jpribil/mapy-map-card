@@ -271,19 +271,6 @@ export class MapyMapCardEditor extends LitElement {
         </label>
 
         <label>
-          Line opacity (0.1 – 1)
-          <input
-            type="number"
-            min="0.1"
-            max="1"
-            step="0.05"
-            .value=${String(cfg.history_line_opacity ?? 0.65)}
-            @input=${(e: InputEvent) =>
-              this._patch({ history_line_opacity: Number((e.target as HTMLInputElement).value) || undefined })}
-          />
-        </label>
-
-        <label>
           Line color (empty = entity color)
           <input
             type="text"
