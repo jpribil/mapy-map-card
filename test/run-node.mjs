@@ -96,15 +96,31 @@ ok("leaflet container", !!root?.querySelector(".mmc-map.leaflet-container"));
 ok("tile layer src uses mapy.com api v1", !!root?.querySelector('img.leaflet-tile[src*="api.mapy.com/v1/maptiles/basic"]'));
 const switcherControls = [...(root?.querySelectorAll(".leaflet-control-layers") ?? [])];
 ok("tile style switcher control rendered", switcherControls.length === 2);
-ok("both switchers start collapsed", !root?.querySelector(".leaflet-control-layers-expanded"));
+ok("both switchers start collapsed", !root?.querySelector(".mmc-switch-expanded"));
 ok(
   "tile style switcher lists all styles",
-  switcherControls[0]?.querySelectorAll(".leaflet-control-layers-list label").length === 4
+  switcherControls[0]?.querySelectorAll(".mmc-switch-list label").length === 4
 );
 ok(
   "history range switcher lists all options",
-  switcherControls[1]?.querySelectorAll(".leaflet-control-layers-list label").length === 6
+  switcherControls[1]?.querySelectorAll(".mmc-switch-list label").length === 6
 );
+
+// --- switcher can be opened and closed again by clicking its own toggle
+const tileToggle = switcherControls[0]?.querySelector(".leaflet-control-layers-toggle");
+tileToggle?.dispatchEvent(new w.MouseEvent("click", { bubbles: true }));
+await tick(50);
+ok("clicking the toggle expands the switcher", switcherControls[0]?.classList.contains("mmc-switch-expanded"));
+tileToggle?.dispatchEvent(new w.MouseEvent("click", { bubbles: true }));
+await tick(50);
+ok("clicking the toggle again collapses it", !switcherControls[0]?.classList.contains("mmc-switch-expanded"));
+
+// --- clicking elsewhere on the map also closes an open switcher
+tileToggle?.dispatchEvent(new w.MouseEvent("click", { bubbles: true }));
+await tick(50);
+root.querySelector(".mmc-map")?.dispatchEvent(new w.MouseEvent("click", { bubbles: true }));
+await tick(50);
+ok("clicking the map closes an open switcher", !switcherControls[0]?.classList.contains("mmc-switch-expanded"));
 ok(
   "history range switcher defaults to configured hours_to_show",
   switcherControls[1]?.querySelector('input[type="radio"]:checked')?.parentElement?.textContent?.trim() === "24 h"
@@ -180,6 +196,29 @@ el.addEventListener("hass-more-info", (ev) => (moreInfoId = ev.detail.entityId))
 root.querySelector(".mmc-dot")?.dispatchEvent(new w.MouseEvent("click", { bubbles: true }));
 await tick(100);
 ok("click opens more-info", moreInfoId === "person.tester");
+
+// --- live picks (tile style, history range) persist across re-attach via localStorage
+const tileSwitcher = root.querySelectorAll(".leaflet-control-layers")[0];
+const outdoorRadio = [...tileSwitcher.querySelectorAll('input[type="radio"]')].find(
+  (r) => r.parentElement?.textContent?.trim() === "Outdoor"
+);
+outdoorRadio?.click();
+await tick(50);
+const cardHost = doc.getElementById("card");
+cardHost.removeChild(el); // simulates HA re-attach (e.g. edit-mode toggle)
+await tick(50);
+cardHost.appendChild(el);
+await tick(400);
+const reRoot = el.shadowRoot;
+const reTileSwitcher = reRoot.querySelectorAll(".leaflet-control-layers")[0];
+ok(
+  "tile style pick survives disconnect/reconnect via localStorage",
+  reTileSwitcher?.querySelector('input[type="radio"]:checked')?.parentElement?.textContent?.trim() === "Outdoor"
+);
+ok(
+  "persisted tile style is actually applied to the map",
+  !!reRoot.querySelector('img.leaflet-tile[src*="api.mapy.com/v1/maptiles/outdoor"]')
+);
 
 // --- dark mode
 el.setConfig({ type: "custom:mapy-map-card", api_key: "K", theme_mode: "dark", hours_to_show: 0 });

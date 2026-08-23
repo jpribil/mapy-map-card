@@ -141,7 +141,12 @@ ha-card {
   color: #fff;
 }
 
-/* --- tile style switcher --- */
+/* --- unobtrusive top-right switch controls (tile style / history range) ---
+   Custom controls (not Leaflet's built-in layers control): click the icon
+   to open, click it again / pick an option / click elsewhere on the map to
+   close. Reuses .leaflet-control-layers* for the box look, but the
+   expand/collapse classes below are our own so the toggle never gets
+   hidden mid-interaction the way Leaflet's default layers control does. */
 
 .leaflet-control-layers-toggle,
 .leaflet-retina .leaflet-control-layers-toggle {
@@ -153,38 +158,47 @@ ha-card {
   display: block;
   width: 100%;
   height: 100%;
-  background: no-repeat center / 18px
-    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23333' stroke-width='1.8' stroke-linejoin='round' stroke-linecap='round'><polygon points='12 2 21 7 12 12 3 7'/><polyline points='3 12 12 17 21 12'/><polyline points='3 17 12 22 21 17'/></svg>");
+  background: no-repeat center / 18px;
 }
 
-.leaflet-control-layers-expanded {
-  font-size: 12px;
-  padding: 8px 10px;
+.mmc-switch-list {
+  display: none;
 }
 
-.leaflet-control-layers label {
+.mmc-switch-expanded .mmc-switch-list {
+  display: block;
+  position: relative;
+}
+
+.mmc-switch-expanded {
+  padding: 6px 10px 6px 6px;
+  color: #333;
+  background: #fff;
+}
+
+.mmc-switch-list label {
+  display: block;
   font-size: 12px;
   margin: 3px 0;
+  white-space: nowrap;
 }
 
 .mmc-dark .leaflet-control-layers-toggle {
   background-color: rgba(30, 30, 30, 0.85);
 }
 
-.mmc-dark .leaflet-control-layers-toggle::before {
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ddd' stroke-width='1.8' stroke-linejoin='round' stroke-linecap='round'><polygon points='12 2 21 7 12 12 3 7'/><polyline points='3 12 12 17 21 12'/><polyline points='3 17 12 22 21 17'/></svg>");
-}
-
-.mmc-dark .leaflet-control-layers-expanded {
+.mmc-dark .mmc-switch-expanded {
   background: rgba(30, 30, 30, 0.92);
   color: #ddd;
 }
 
-.mmc-dark .leaflet-control-layers-separator {
-  border-top-color: rgba(255, 255, 255, 0.2);
+.mmc-tilestyle-toggle::before {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23333' stroke-width='1.8' stroke-linejoin='round' stroke-linecap='round'><polygon points='12 2 21 7 12 12 3 7'/><polyline points='3 12 12 17 21 12'/><polyline points='3 17 12 22 21 17'/></svg>");
 }
 
-/* --- history range switcher (same visual family, different icon) --- */
+.mmc-dark .mmc-tilestyle-toggle::before {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ddd' stroke-width='1.8' stroke-linejoin='round' stroke-linecap='round'><polygon points='12 2 21 7 12 12 3 7'/><polyline points='3 12 12 17 21 12'/><polyline points='3 17 12 22 21 17'/></svg>");
+}
 
 .mmc-history-toggle::before {
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23333' stroke-width='1.8' stroke-linejoin='round' stroke-linecap='round'><circle cx='12' cy='12' r='9'/><polyline points='12 7 12 12 16 14'/></svg>");

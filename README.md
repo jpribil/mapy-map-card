@@ -10,8 +10,8 @@ A [Home Assistant](https://www.home-assistant.io/) Lovelace card that replaces t
 - 👤 Entities with GPS position (`person`, `device_tracker`, `geo_location`, …) – including picture markers based on `entity_picture`
 - 〰️ **Location history** via the `history/history_stream` WebSocket API (same mechanism as the built-in map card), with a one-shot `history/history_during_period` fallback
 - ⭕ **Zones** with radius; passive zones shown in gray
-- 🗂️ Unobtrusive tile style switcher (top-right corner) to flip between basic/outdoor/winter/aerial live, without editing the config
-- ⏱️ Unobtrusive history-range switcher (top-right corner) to flip the trail window (24h/12h/6h/2h/1h/off) live, without editing the config
+- 🗂️ Unobtrusive tile style switcher (top-right corner) to flip between basic/outdoor/winter/aerial live, without editing the config – remembered per browser
+- ⏱️ Unobtrusive history-range switcher (top-right corner) to flip the trail window (24h/12h/6h/2h/1h/off) live, without editing the config – remembered per browser
 - 🎨 Dark mode (`auto` follows the HA theme), automatic fit bounds
 - 🛠️ GUI editor with entity picker (uses `ha-entity-picker`)
 - Clicking a marker opens the standard *more-info* dialog
@@ -39,7 +39,7 @@ and register it in your dashboard configuration (YAML or *Raw editor*):
 
 ```yaml
 resources:
-  - url: /local/mapy-map-card.js?v=0.3.3
+  - url: /local/mapy-map-card.js?v=0.3.4
     type: module
 ```
 
@@ -124,6 +124,7 @@ history_point_type: dot           # dot | ring | square | none
 - Location history requires the **Recorder** integration (enabled by default).
 - The `aerial` style is experimental – it requires the aerial imagery product to be enabled for your project at developer.mapy.com; if tiles are missing, use `basic`/`outdoor`.
 - Using the API key means you agree to the [Mapy.com API terms](https://developer.mapy.com/).
+- Live picks from the tile style / history range switchers are saved to the browser's `localStorage`, keyed by the card's entities + title – they're per-browser, not written back into the dashboard's YAML/storage config, so they don't carry over to other devices or viewers.
 
 ## Development
 

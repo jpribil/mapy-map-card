@@ -1,6 +1,6 @@
 {
   "name": "mapy-map-card",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "Home Assistant Lovelace map card powered by Mapy.com tiles",
   "type": "module",
   "main": "dist/mapy-map-card.js",

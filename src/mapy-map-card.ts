@@ -45,50 +45,79 @@ const HISTORY_RANGE_OPTIONS: Array<{ label: string; hours: number }> = [
 ];
 
 /**
- * Unobtrusive top-right control (same visual family as Leaflet's built-in
- * layers control) to switch the history trail window live, without
- * touching the card config.
+ * Unobtrusive top-right radio-list control (collapsed icon; click to open,
+ * click again / pick an option / click elsewhere on the map to close) used
+ * for both the tile-style and history-range switchers. Deliberately not
+ * Leaflet's built-in layers control: that one hides its own toggle while
+ * expanded and only auto-collapses on hover-out, which makes it impossible
+ * to close by clicking on touch/tablet dashboards.
  */
-class HistoryRangeControl extends L.Control {
+class SwitchControl<T extends string | number> extends L.Control {
+  private _container?: HTMLElement;
   private _list?: HTMLElement;
+  private _expanded = false;
+  private readonly _onMapClick = () => this._setExpanded(false);
 
   constructor(
-    private readonly getSelected: () => number,
-    private readonly onSelect: (hours: number) => void
+    private readonly toggleClass: string,
+    private readonly toggleTitle: string,
+    private readonly choices: Array<{ label: string; value: T }>,
+    private readonly getSelected: () => T,
+    private readonly onSelect: (value: T) => void
   ) {
     super({ position: "topright" });
   }
 
-  public override onAdd(): HTMLElement {
+  public override onAdd(map: L.Map): HTMLElement {
     const container = L.DomUtil.create("div", "leaflet-control-layers");
     L.DomEvent.disableClickPropagation(container);
     L.DomEvent.disableScrollPropagation(container);
 
-    const toggle = L.DomUtil.create("a", "leaflet-control-layers-toggle mmc-history-toggle", container);
+    const toggle = L.DomUtil.create("a", `leaflet-control-layers-toggle ${this.toggleClass}`, container);
     toggle.href = "#";
-    toggle.title = "History range";
+    toggle.title = this.toggleTitle;
     toggle.setAttribute("role", "button");
     L.DomEvent.on(toggle, "click", (ev) => {
       L.DomEvent.preventDefault(ev);
-      container.classList.toggle("leaflet-control-layers-expanded");
+      this._setExpanded(!this._expanded);
     });
 
-    this._list = L.DomUtil.create("section", "leaflet-control-layers-list", container);
-    this.update();
+    this._list = L.DomUtil.create("section", "mmc-switch-list", container);
+    this._container = container;
+    map.on("click", this._onMapClick);
+
+    this._render();
     return container;
   }
 
+  public override onRemove(map: L.Map): void {
+    map.off("click", this._onMapClick);
+  }
+
+  /** Re-render the option list (e.g. after the selected value changed elsewhere). */
   public update(): void {
+    this._render();
+  }
+
+  private _setExpanded(expanded: boolean): void {
+    this._expanded = expanded;
+    this._container?.classList.toggle("mmc-switch-expanded", expanded);
+  }
+
+  private _render(): void {
     if (!this._list) return;
     this._list.textContent = "";
     const selected = this.getSelected();
-    for (const opt of HISTORY_RANGE_OPTIONS) {
+    for (const opt of this.choices) {
       const label = L.DomUtil.create("label", "", this._list);
       const input = L.DomUtil.create("input", "leaflet-control-layers-selector", label) as HTMLInputElement;
       input.type = "radio";
-      input.name = "mmc-history-range";
-      input.checked = selected === opt.hours;
-      L.DomEvent.on(input, "change", () => this.onSelect(opt.hours));
+      input.name = this.toggleClass;
+      input.checked = selected === opt.value;
+      L.DomEvent.on(input, "change", () => {
+        this.onSelect(opt.value);
+        this._setExpanded(false);
+      });
       label.appendChild(document.createTextNode(" " + opt.label));
     }
   }
@@ -106,11 +135,12 @@ export class MapyMapCard extends LitElement {
   private _tileUrl?: string;
   private _tileStyleLayers?: Partial<Record<TileStyle, L.TileLayer>>;
   private _tileSwitchKey = "";
-  private _appliedTileStyle?: TileStyle;
-  private _layersControl?: L.Control.Layers;
-  private _historyControl?: HistoryRangeControl;
+  private _tileStyleOverride?: TileStyle;
+  private _layersControl?: SwitchControl<TileStyle>;
+  private _historyControl?: SwitchControl<number>;
   private _hoursOverride?: number;
-  private _appliedConfigHours?: number;
+  /** localStorage key for this card's persisted style/history-range picks. */
+  private _storageKey?: string;
   private _markerLayer?: L.LayerGroup;
   private _zoneLayer?: L.LayerGroup;
   private _historyLayer?: L.LayerGroup;
@@ -171,6 +201,11 @@ export class MapyMapCard extends LitElement {
       ...config,
     };
 
+    this._storageKey = this._prefsStorageKey(this._config);
+    const saved = this._loadPrefs(this._storageKey);
+    this._tileStyleOverride = saved?.tileStyle;
+    this._hoursOverride = saved?.hours;
+
     this._resetHistory();
     if (this._map) {
       this._updateTileLayer();
@@ -209,11 +244,10 @@ export class MapyMapCard extends LitElement {
     this._tileUrl = undefined;
     this._tileStyleLayers = undefined;
     this._tileSwitchKey = "";
-    this._appliedTileStyle = undefined;
     this._layersControl = undefined;
     this._historyControl = undefined;
-    this._hoursOverride = undefined;
-    this._appliedConfigHours = undefined;
+    // _tileStyleOverride / _hoursOverride are deliberately NOT reset here –
+    // a live pick should survive a re-attach (e.g. toggling HA edit mode)
     this._zonesKey = "";
     this._markers.clear();
     this._markerColors.clear();
@@ -317,7 +351,10 @@ export class MapyMapCard extends LitElement {
     );
 
     this._updateTileLayer();
-    this._historyControl = new HistoryRangeControl(
+    this._historyControl = new SwitchControl<number>(
+      "mmc-history-toggle",
+      "History range",
+      HISTORY_RANGE_OPTIONS.map((opt) => ({ label: opt.label, value: opt.hours })),
       () => this._effectiveHours(),
       (hours) => this._setHoursOverride(hours)
     ).addTo(this._map);
@@ -369,7 +406,50 @@ export class MapyMapCard extends LitElement {
       this._tileStyleLayers = undefined;
     }
     this._tileSwitchKey = "";
-    this._appliedTileStyle = undefined;
+  }
+
+  private _pickTileStyle(style: TileStyle): void {
+    if (this._tileStyleOverride === style) return;
+    this._tileStyleOverride = style;
+    this._savePrefs({ tileStyle: style });
+    this._layersControl?.update();
+    const next = this._tileStyleLayers?.[style];
+    if (next && next !== this._tileLayer && this._map) {
+      if (this._tileLayer) this._map.removeLayer(this._tileLayer);
+      next.addTo(this._map);
+      this._tileLayer = next;
+    }
+  }
+
+  /** Stable-ish per-card key (entities + title) for persisted live picks. */
+  private _prefsStorageKey(cfg: CardConfig): string {
+    const ids = normalizeEntities(cfg.entities ?? [])
+      .map((e) => e.entity)
+      .sort()
+      .join(",");
+    const raw = `${cfg.title ?? ""}|${ids}`;
+    let hash = 0;
+    for (let i = 0; i < raw.length; i++) hash = (hash * 31 + raw.charCodeAt(i)) | 0;
+    return `mapy-map-card:${hash}`;
+  }
+
+  private _loadPrefs(key: string): { tileStyle?: TileStyle; hours?: number } | undefined {
+    try {
+      const raw = window.localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  private _savePrefs(patch: { tileStyle?: TileStyle; hours?: number }): void {
+    if (!this._storageKey) return;
+    try {
+      const current = this._loadPrefs(this._storageKey) ?? {};
+      window.localStorage.setItem(this._storageKey, JSON.stringify({ ...current, ...patch }));
+    } catch {
+      // storage unavailable (private browsing, quota, disabled) – live pick still works this session
+    }
   }
 
   private _updateTileLayer(): void {
@@ -395,7 +475,7 @@ export class MapyMapCard extends LitElement {
     if (!apiKey) return;
     const lang = cfg.language?.trim() ?? "";
     const switchKey = `${apiKey}|${lang}|${cfg.tile_attribution ?? ""}`;
-    const wantedStyle: TileStyle = cfg.tile_style ?? "basic";
+    const configStyle: TileStyle = cfg.tile_style ?? "basic";
 
     // api key / language changed (or first run) -> (re)build every style as a
     // switchable base layer and add the unobtrusive top-right style control
@@ -412,28 +492,28 @@ export class MapyMapCard extends LitElement {
         });
       }
       this._tileStyleLayers = layers;
-
-      const named: Record<string, L.Layer> = {};
-      for (const style of TILE_STYLES) named[TILE_STYLE_LABELS[style]] = layers[style]!;
-      this._layersControl = L.control
-        .layers(named, undefined, { position: "topright", collapsed: true })
-        .addTo(this._map);
-
       this._tileLayer = undefined;
+
+      this._layersControl = new SwitchControl<TileStyle>(
+        "mmc-tilestyle-toggle",
+        "Tile style",
+        TILE_STYLES.map((style) => ({ label: TILE_STYLE_LABELS[style], value: style })),
+        () => this._tileStyleOverride ?? this._config?.tile_style ?? "basic",
+        (style) => this._pickTileStyle(style)
+      ).addTo(this._map);
     }
 
-    // switch the active base layer whenever the configured style changes
-    // (a style picked live via the control is left alone otherwise)
-    if (this._appliedTileStyle !== wantedStyle) {
-      this._appliedTileStyle = wantedStyle;
-      const next = this._tileStyleLayers?.[wantedStyle];
-      if (next && next !== this._tileLayer) {
-        if (this._tileLayer) this._map.removeLayer(this._tileLayer);
-        next.addTo(this._map);
-        this._tileLayer = next;
-      }
+    // switch to the persisted/live-picked style if there is one, else the
+    // configured default
+    const effective = this._tileStyleOverride ?? configStyle;
+    const next = this._tileStyleLayers?.[effective];
+    if (next && next !== this._tileLayer) {
+      if (this._tileLayer) this._map.removeLayer(this._tileLayer);
+      next.addTo(this._map);
+      this._tileLayer = next;
     }
-    this._tileUrl = this._tileStyleUrl(wantedStyle, apiKey, lang);
+    this._layersControl?.update();
+    this._tileUrl = this._tileStyleUrl(effective, apiKey, lang);
   }
 
   private _processHass(): void {
@@ -594,19 +674,15 @@ export class MapyMapCard extends LitElement {
     this._unsubHistory = undefined;
   }
 
-  /** Config default, unless overridden live via the history-range control. */
+  /** Persisted/live-picked history window, else the configured default. */
   private _effectiveHours(): number {
-    const configHours = Number(this._config?.hours_to_show ?? 24);
-    if (this._appliedConfigHours !== configHours) {
-      this._appliedConfigHours = configHours;
-      this._hoursOverride = undefined;
-    }
-    return this._hoursOverride ?? configHours;
+    return this._hoursOverride ?? Number(this._config?.hours_to_show ?? 24);
   }
 
   private _setHoursOverride(hours: number): void {
     if (this._hoursOverride === hours) return;
     this._hoursOverride = hours;
+    this._savePrefs({ hours });
     this._historyControl?.update();
     if (this._map) this._updateHistorySubscription();
   }
