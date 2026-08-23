@@ -322,6 +322,26 @@ ok("editor emits config-changed with title", cfgFromEditor?.title === "Moje mapa
 ok("editor textarea fallback renders", !!editor.shadowRoot.querySelector("textarea"));
 ok("editor shows entity colors section", !!editor.shadowRoot.querySelector('input[type="color"]'));
 
+// --- tile cache section in the editor
+const cacheStatsEl = editor.shadowRoot.querySelector(".cache-stats");
+ok("editor shows tile cache stats", !!cacheStatsEl && /Cached: \d+ tiles/.test(cacheStatsEl.textContent));
+const clearCacheBtn = [...editor.shadowRoot.querySelectorAll(".cache-stats button")].find(
+  (b) => b.textContent.trim() === "Clear cache"
+);
+clearCacheBtn?.dispatchEvent(new w.MouseEvent("click", { bubbles: true }));
+await tick(50);
+ok("clear cache button does not throw", errors.length === 0);
+cfgFromEditor = null;
+const cacheMbInput = [...editor.shadowRoot.querySelectorAll('input[type="number"]')].find(
+  (i) => i.closest("label")?.textContent?.includes("Cache size limit")
+);
+if (cacheMbInput) {
+  cacheMbInput.value = "10";
+  cacheMbInput.dispatchEvent(new w.Event("input", { bubbles: true }));
+  await tick(50);
+}
+ok("editor patches tile_cache_mb", cfgFromEditor?.tile_cache_mb === 10);
+
 console.log(results.join("\n"));
 console.log(errors.length ? "\nJS ERRORS:\n" + errors.join("\n") : "\nno js errors");
 console.log(allOk && errors.length === 0 ? "\n== ALL CHECKS PASSED ==" : "\n== SOME CHECKS FAILED ==");

@@ -4,6 +4,7 @@ import { customElement, property, state } from "lit/decorators.js";
 import { CardConfig, EntityConfig, EntityConfigOrString, HistoryPointType, TileStyle } from "./types";
 import type { HomeAssistant } from "./ha";
 import { TILE_STYLES, normalizeEntities, resolveEntityColor } from "./utils";
+import { clearTileCache, getTileCacheStats } from "./tile-cache";
 
 let pickerPromise: Promise<boolean> | null = null;
 
@@ -48,6 +49,7 @@ export class MapyMapCardEditor extends LitElement {
 
   @state() private _config: CardConfig = { type: CARD_TYPE };
   @state() private _pickerReady = false;
+  @state() private _cacheStats = getTileCacheStats();
 
   public setConfig(config: CardConfig): void {
     this._config = { ...config };
@@ -58,6 +60,12 @@ export class MapyMapCardEditor extends LitElement {
     loadEntityPicker().then((ok) => {
       this._pickerReady = ok;
     });
+    this._cacheStats = getTileCacheStats();
+  }
+
+  private async _clearTileCache(): Promise<void> {
+    await clearTileCache();
+    this._cacheStats = getTileCacheStats();
   }
 
   protected override render(): TemplateResult {
@@ -147,6 +155,22 @@ export class MapyMapCardEditor extends LitElement {
           font-size: 16px;
           cursor: pointer;
           padding: 4px 8px;
+        }
+        .cache-stats {
+          display: flex;
+          flex-wrap: wrap;
+          align-items: center;
+          gap: 8px;
+        }
+        button.btn {
+          border: 1px solid var(--divider-color, #ccc);
+          border-radius: 4px;
+          background: var(--card-background-color, #fff);
+          color: var(--primary-text-color, #000);
+          font: inherit;
+          font-size: 12px;
+          cursor: pointer;
+          padding: 4px 10px;
         }
       </style>
       <div class="grid">
@@ -305,6 +329,29 @@ export class MapyMapCardEditor extends LitElement {
               this._patch({ history_point_color: (e.target as HTMLInputElement).value.trim() || undefined })}
           />
         </label>
+
+        <div class="section">Tile cache</div>
+
+        <label>
+          Cache size limit (MB, 0 = off)
+          <input
+            type="number"
+            min="0"
+            max="500"
+            .value=${String(cfg.tile_cache_mb ?? 50)}
+            @input=${(e: InputEvent) =>
+              this._patch({ tile_cache_mb: Number((e.target as HTMLInputElement).value) })}
+          />
+        </label>
+
+        <div class="hint full cache-stats">
+          Cached: ${this._cacheStats.tileCount} tiles (~${this._cacheStats.sizeMb} MB) · Hits:
+          ${this._cacheStats.hits} · Misses: ${this._cacheStats.misses}
+          <button class="btn" type="button" @click=${() => (this._cacheStats = getTileCacheStats())}>
+            Refresh
+          </button>
+          <button class="btn" type="button" @click=${() => this._clearTileCache()}>Clear cache</button>
+        </div>
 
         <div class="section">Entity colors</div>
         ${this._renderEntityColors()}

@@ -24,6 +24,7 @@ import {
   resolveEntityColor,
 } from "./utils";
 import { parseHistoryStates } from "./history";
+import { CachedTileLayer, setTileCacheLimitMb } from "./tile-cache";
 
 const TILE_MAX_NATIVE_ZOOM: Record<TileStyle, number> = {
   basic: 19,
@@ -459,13 +460,14 @@ export class MapyMapCard extends LitElement {
     if (!this._map || !this._config) return;
     const cfg = this._config;
     const customUrl = cfg.tile_url?.trim();
+    setTileCacheLimitMb(cfg.tile_cache_mb ?? 50);
 
     if (customUrl) {
       this._teardownStyleSwitcher();
       if (customUrl === this._tileUrl) return;
       this._tileUrl = customUrl;
       if (this._tileLayer) this._map.removeLayer(this._tileLayer);
-      this._tileLayer = L.tileLayer(customUrl, {
+      this._tileLayer = new CachedTileLayer(customUrl, {
         attribution: cfg.tile_attribution ?? DEFAULT_TILE_ATTRIBUTION,
         maxZoom: 21,
         maxNativeZoom: 19,
@@ -488,7 +490,7 @@ export class MapyMapCard extends LitElement {
 
       const layers: Partial<Record<TileStyle, L.TileLayer>> = {};
       for (const style of TILE_STYLES) {
-        layers[style] = L.tileLayer(this._tileStyleUrl(style, apiKey, lang), {
+        layers[style] = new CachedTileLayer(this._tileStyleUrl(style, apiKey, lang), {
           attribution: cfg.tile_attribution ?? DEFAULT_TILE_ATTRIBUTION,
           maxZoom: 21,
           maxNativeZoom: TILE_MAX_NATIVE_ZOOM[style] ?? 19,

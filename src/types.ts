@@ -41,6 +41,9 @@ export interface CardConfig {
   history_point_color?: string;
   /** History trail point style (default "dot") */
   history_point_type?: HistoryPointType;
+
+  /** Client-side tile cache size limit in MB, shared across all cards in this browser (default 50); 0 disables it */
+  tile_cache_mb?: number;
 }
 
 export type HistoryPointType = "dot" | "ring" | "square" | "none";

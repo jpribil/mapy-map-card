@@ -10,6 +10,7 @@ A [Home Assistant](https://www.home-assistant.io/) Lovelace card that replaces t
 - 👤 Entities with GPS position (`person`, `device_tracker`, `geo_location`, …) – including picture markers based on `entity_picture`
 - 〰️ **Location history** via the `history/history_stream` WebSocket API (same mechanism as the built-in map card), with a one-shot `history/history_during_period` fallback
 - ⭕ **Zones** with radius; passive zones shown in gray
+- 💾 Client-side tile cache (Cache Storage API), shared across all cards in the browser – cuts down repeat tile downloads; size limit and a clear-cache button with hit/miss stats live in the card editor
 - 🗂️ Unobtrusive tile style switcher (top-right corner) to flip between basic/outdoor/winter/aerial live, without editing the config – remembered per browser
 - ⏱️ Unobtrusive history-range switcher (top-right corner) to flip the trail window (24h/12h/6h/2h/1h/off) live, without editing the config – remembered per browser
 - 🎨 Dark mode (`auto` follows the HA theme), automatic fit bounds
@@ -39,7 +40,7 @@ and register it in your dashboard configuration (YAML or *Raw editor*):
 
 ```yaml
 resources:
-  - url: /local/mapy-map-card.js?v=0.3.5
+  - url: /local/mapy-map-card.js?v=0.4.0
     type: module
 ```
 
@@ -74,6 +75,7 @@ resources:
 | `history_point_type` | `dot`/`ring`/`square`/`none` | `dot` | Style of the trail points; hovering a point shows its date & time |
 | `tile_url` | string | – | Advanced: custom `{z}/{x}/{y}` tile URL template (overrides Mapy.com) |
 | `tile_attribution` | string | – | Custom attribution for custom tiles |
+| `tile_cache_mb` | number | `50` | Client-side tile cache size limit in MB, shared across every mapy-map-card in this browser; `0` disables it |
 
 ### Examples
 
@@ -124,6 +126,7 @@ history_point_type: dot           # dot | ring | square | none
 - The `aerial` style is experimental – it requires the aerial imagery product to be enabled for your project at developer.mapy.com; if tiles are missing, use `basic`/`outdoor`.
 - Using the API key means you agree to the [Mapy.com API terms](https://developer.mapy.com/).
 - Live picks from the tile style / history range switchers are saved to the browser's `localStorage`, keyed by the card's entities + title – they're per-browser, not written back into the dashboard's YAML/storage config, so they don't carry over to other devices or viewers.
+- The tile cache lives in the browser's Cache Storage (per browser/device, like the switcher picks above) and falls back to plain network requests automatically if the Cache API is unavailable or blocked (private browsing, older embedded browsers) – caching can never break the map.
 
 ## Development
 
