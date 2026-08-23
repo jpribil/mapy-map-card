@@ -30,6 +30,7 @@ const svgDot =
   Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><circle cx="20" cy="20" r="18" fill="#1e88e5"/></svg>').toString("base64");
 
 let lastHistoryCb = null;
+let lastHistoryMessage = null;
 function makeHass() {
   return {
     themes: { darkMode: false },
@@ -52,8 +53,9 @@ function makeHass() {
       "light.kitchen": { entity_id: "light.kitchen", state: "on", attributes: { friendly_name: "Kitchen" } },
     },
     connection: {
-      subscribeMessage: async (cb) => {
+      subscribeMessage: async (cb, message) => {
         lastHistoryCb = cb;
+        lastHistoryMessage = message;
         return async () => {};
       },
     },
@@ -92,11 +94,20 @@ const root = el.shadowRoot;
 ok("shadow rendered", !!root);
 ok("leaflet container", !!root?.querySelector(".mmc-map.leaflet-container"));
 ok("tile layer src uses mapy.com api v1", !!root?.querySelector('img.leaflet-tile[src*="api.mapy.com/v1/maptiles/basic"]'));
-ok("tile style switcher control rendered", !!root?.querySelector(".leaflet-control-layers"));
-ok("tile style switcher starts collapsed", !root?.querySelector(".leaflet-control-layers-expanded"));
+const switcherControls = [...(root?.querySelectorAll(".leaflet-control-layers") ?? [])];
+ok("tile style switcher control rendered", switcherControls.length === 2);
+ok("both switchers start collapsed", !root?.querySelector(".leaflet-control-layers-expanded"));
 ok(
   "tile style switcher lists all styles",
-  [...(root?.querySelectorAll(".leaflet-control-layers-list label") ?? [])].length === 4
+  switcherControls[0]?.querySelectorAll(".leaflet-control-layers-list label").length === 4
+);
+ok(
+  "history range switcher lists all options",
+  switcherControls[1]?.querySelectorAll(".leaflet-control-layers-list label").length === 6
+);
+ok(
+  "history range switcher defaults to configured hours_to_show",
+  switcherControls[1]?.querySelector('input[type="radio"]:checked')?.parentElement?.textContent?.trim() === "24 h"
 );
 ok("marker dot for person.tester", !!root?.querySelector(".mmc-dot"));
 ok("picture icon for person.mobile", !!root?.querySelector("img.mmc-picture-icon"));
@@ -136,6 +147,32 @@ await tick(100);
 const tipTexts = [...root.querySelectorAll(".leaflet-tooltip")].map((t) => t.textContent ?? "");
 ok("trail point tooltip shows time", tipTexts.some((t) => /\d{4}/.test(t) && t.includes(":")));
 ok("no runtime errors so far", errors.length === 0);
+
+// --- history range switcher: picking "1 h" live re-subscribes with a ~1h window
+const oneHourRadio = [...switcherControls[1].querySelectorAll('input[type="radio"]')].find(
+  (r) => r.parentElement?.textContent?.trim() === "1 h"
+);
+oneHourRadio?.click();
+await tick(100);
+const windowMs = lastHistoryMessage
+  ? Date.parse(lastHistoryMessage.end_time) - Date.parse(lastHistoryMessage.start_time)
+  : 0;
+ok("selecting 1 h re-subscribes with a ~1h window", windowMs > 0.9 * 3600 * 1000 && windowMs < 1.1 * 3600 * 1000);
+ok(
+  "history range switcher shows 1 h as selected after click",
+  switcherControls[1].querySelector('input[type="radio"]:checked')?.parentElement?.textContent?.trim() === "1 h"
+);
+
+// --- picking "Off" clears the trail live
+const offRadio = [...switcherControls[1].querySelectorAll('input[type="radio"]')].find(
+  (r) => r.parentElement?.textContent?.trim() === "Off"
+);
+offRadio?.click();
+await tick(100);
+ok(
+  "selecting Off clears the trail",
+  root.querySelectorAll(".leaflet-overlay-pane path.leaflet-interactive").length === 1 // zone circle only
+);
 
 // --- more-info event on marker click
 let moreInfoId = null;

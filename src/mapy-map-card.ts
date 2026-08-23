@@ -35,6 +35,65 @@ const TILE_MAX_NATIVE_ZOOM: Record<TileStyle, number> = {
 const DEFAULT_TILE_ATTRIBUTION =
   '&copy; <a href="https://mapy.com/">Mapy.com</a> &copy; <a href="https://www.seznam.cz/">Seznam.cz, a.s.</a>';
 
+const HISTORY_RANGE_OPTIONS: Array<{ label: string; hours: number }> = [
+  { label: "24 h", hours: 24 },
+  { label: "12 h", hours: 12 },
+  { label: "6 h", hours: 6 },
+  { label: "2 h", hours: 2 },
+  { label: "1 h", hours: 1 },
+  { label: "Off", hours: 0 },
+];
+
+/**
+ * Unobtrusive top-right control (same visual family as Leaflet's built-in
+ * layers control) to switch the history trail window live, without
+ * touching the card config.
+ */
+class HistoryRangeControl extends L.Control {
+  private _list?: HTMLElement;
+
+  constructor(
+    private readonly getSelected: () => number,
+    private readonly onSelect: (hours: number) => void
+  ) {
+    super({ position: "topright" });
+  }
+
+  public override onAdd(): HTMLElement {
+    const container = L.DomUtil.create("div", "leaflet-control-layers");
+    L.DomEvent.disableClickPropagation(container);
+    L.DomEvent.disableScrollPropagation(container);
+
+    const toggle = L.DomUtil.create("a", "leaflet-control-layers-toggle mmc-history-toggle", container);
+    toggle.href = "#";
+    toggle.title = "History range";
+    toggle.setAttribute("role", "button");
+    L.DomEvent.on(toggle, "click", (ev) => {
+      L.DomEvent.preventDefault(ev);
+      container.classList.toggle("leaflet-control-layers-expanded");
+    });
+
+    this._list = L.DomUtil.create("section", "leaflet-control-layers-list", container);
+    this.update();
+    return container;
+  }
+
+  public update(): void {
+    if (!this._list) return;
+    this._list.textContent = "";
+    const selected = this.getSelected();
+    for (const opt of HISTORY_RANGE_OPTIONS) {
+      const label = L.DomUtil.create("label", "", this._list);
+      const input = L.DomUtil.create("input", "leaflet-control-layers-selector", label) as HTMLInputElement;
+      input.type = "radio";
+      input.name = "mmc-history-range";
+      input.checked = selected === opt.hours;
+      L.DomEvent.on(input, "change", () => this.onSelect(opt.hours));
+      label.appendChild(document.createTextNode(" " + opt.label));
+    }
+  }
+}
+
 @customElement("mapy-map-card")
 export class MapyMapCard extends LitElement {
   @property({ attribute: false }) public hass?: HomeAssistant;
@@ -49,6 +108,9 @@ export class MapyMapCard extends LitElement {
   private _tileSwitchKey = "";
   private _appliedTileStyle?: TileStyle;
   private _layersControl?: L.Control.Layers;
+  private _historyControl?: HistoryRangeControl;
+  private _hoursOverride?: number;
+  private _appliedConfigHours?: number;
   private _markerLayer?: L.LayerGroup;
   private _zoneLayer?: L.LayerGroup;
   private _historyLayer?: L.LayerGroup;
@@ -149,6 +211,9 @@ export class MapyMapCard extends LitElement {
     this._tileSwitchKey = "";
     this._appliedTileStyle = undefined;
     this._layersControl = undefined;
+    this._historyControl = undefined;
+    this._hoursOverride = undefined;
+    this._appliedConfigHours = undefined;
     this._zonesKey = "";
     this._markers.clear();
     this._markerColors.clear();
@@ -252,6 +317,10 @@ export class MapyMapCard extends LitElement {
     );
 
     this._updateTileLayer();
+    this._historyControl = new HistoryRangeControl(
+      () => this._effectiveHours(),
+      (hours) => this._setHoursOverride(hours)
+    ).addTo(this._map);
 
     // First render of the dashboard can race with card initialization
     // (zero-size container, throttled layout, lazy panels). Re-check a few
@@ -525,8 +594,26 @@ export class MapyMapCard extends LitElement {
     this._unsubHistory = undefined;
   }
 
+  /** Config default, unless overridden live via the history-range control. */
+  private _effectiveHours(): number {
+    const configHours = Number(this._config?.hours_to_show ?? 24);
+    if (this._appliedConfigHours !== configHours) {
+      this._appliedConfigHours = configHours;
+      this._hoursOverride = undefined;
+    }
+    return this._hoursOverride ?? configHours;
+  }
+
+  private _setHoursOverride(hours: number): void {
+    if (this._hoursOverride === hours) return;
+    this._hoursOverride = hours;
+    this._historyControl?.update();
+    if (this._map) this._updateHistorySubscription();
+  }
+
   private _updateHistorySubscription(): void {
-    const hours = Number(this._config!.hours_to_show ?? 24);
+    const hours = this._effectiveHours();
+    this._historyControl?.update();
     const ids = this._resolvedEntities().map((cfg) => cfg.entity).sort();
 
     if (!(hours > 0) || ids.length === 0) {
