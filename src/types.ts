@@ -29,11 +29,35 @@ export interface CardConfig {
   theme_mode?: "auto" | "light" | "dark";
   show_zones?: boolean;
   fit_bounds?: boolean;
+
+  /** Per-entity color override, e.g. {"person.joe": "#ff0000"} */
+  entity_colors?: Record<string, string>;
+
+  /** History trail line width in px (default 4) */
+  history_line_width?: number;
+  /** History trail line opacity 0..1 (default 0.65) */
+  history_line_opacity?: number;
+  /** History trail line color – defaults to the entity color */
+  history_line_color?: string;
+  /** History trail point color – defaults to the entity color */
+  history_point_color?: string;
+  /** History trail point style (default "dot") */
+  history_point_type?: HistoryPointType;
 }
+
+export type HistoryPointType = "dot" | "ring" | "square" | "none";
 
 export interface HistoryStreamLocation {
   entity_id: string;
   map_state: [number, number] | null;
+  /** Point timestamp in epoch milliseconds (when available) */
+  ts?: number;
+}
+
+export interface HistoryPoint {
+  lat: number;
+  lon: number;
+  ts?: number;
 }
 
 declare global {

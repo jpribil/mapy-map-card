@@ -1,4 +1,4 @@
-import type { EntityConfig, EntityConfigOrString } from "./types";
+import type { CardConfig, EntityConfig, EntityConfigOrString } from "./types";
 import type { HassState, HomeAssistant } from "./ha";
 
 export const PALETTE = [
@@ -24,6 +24,16 @@ export const PALETTE = [
 
 export function colorForIndex(index: number): string {
   return PALETTE[index % PALETTE.length];
+}
+
+/** Entity color = per-config override, otherwise the palette color for its index. */
+export function resolveEntityColor(
+  config: CardConfig | undefined,
+  entityId: string,
+  index: number
+): string {
+  const override = config?.entity_colors?.[entityId];
+  return typeof override === "string" && override.trim() ? override : colorForIndex(index);
 }
 
 export function normalizeEntities(list: EntityConfigOrString[]): EntityConfig[] {

@@ -103,20 +103,32 @@ ok(
 );
 
 // --- history trail arrives via websocket callback (`history/stream` shape)
+const tsBase = Math.floor(Date.now() / 1000) - 3600; // epoch seconds like HA `lu`
 lastHistoryCb?.({
   states: {
     "person.tester": [
-      { s: "not_home", a: { latitude: 50.06, longitude: 14.41 }, lu: 1 },
-      { s: "not_home", a: { latitude: 50.065, longitude: 14.42 }, lu: 2 },
-      { s: "not_home", a: { latitude: 50.07, longitude: 14.43 }, lu: 3 },
-      { s: "home", a: { latitude: 50.0755, longitude: 14.4378 }, lu: 4 },
+      { s: "not_home", a: { latitude: 50.06, longitude: 14.41 }, lu: tsBase },
+      { s: "not_home", a: { latitude: 50.065, longitude: 14.42 }, lu: tsBase + 60 },
+      { s: "not_home", a: { latitude: 50.07, longitude: 14.43 }, lu: tsBase + 120 },
+      { s: "home", a: { latitude: 50.0755, longitude: 14.4378 }, lu: tsBase + 180 },
     ],
-    "person.mobile": [{ s: "work", a: {}, lu: 1 }],
+    "person.mobile": [{ s: "work", a: {}, lu: tsBase }],
   },
 });
 await tick(100);
 const overlayPaths = root.querySelectorAll(".leaflet-overlay-pane path").length;
 ok("polyline + zone overlays present", overlayPaths >= 2);
+
+// --- trail points rendered as hoverable dots with time tooltips
+let interactivePaths = root.querySelectorAll(".leaflet-overlay-pane path.leaflet-interactive");
+// zone circle (1) + 4 trail dots
+ok("trail dots drawn", interactivePaths.length === 5);
+interactivePaths[interactivePaths.length - 1]?.dispatchEvent(
+  new w.MouseEvent("mouseover", { bubbles: true })
+);
+await tick(100);
+const tipTexts = [...root.querySelectorAll(".leaflet-tooltip")].map((t) => t.textContent ?? "");
+ok("trail point tooltip shows time", tipTexts.some((t) => /\d{4}/.test(t) && t.includes(":")));
 ok("no runtime errors so far", errors.length === 0);
 
 // --- more-info event on marker click
@@ -130,6 +142,65 @@ ok("click opens more-info", moreInfoId === "person.tester");
 el.setConfig({ type: "custom:mapy-map-card", api_key: "K", theme_mode: "dark", hours_to_show: 0 });
 await tick(100);
 ok("dark filter class applied", root.querySelector(".mmc-map").classList.contains("mmc-dark"));
+
+// --- custom trail styling (entity color + line/point colors + square points)
+el.setConfig({
+  type: "custom:mapy-map-card",
+  api_key: "K",
+  entities: ["person.tester", "person.mobile"],
+  hours_to_show: 24,
+  entity_colors: { "person.tester": "#123abc" },
+  history_line_color: "#ff00ff",
+  history_point_color: "#00ff00",
+  history_point_type: "square",
+});
+await tick(100);
+lastHistoryCb?.({
+  states: {
+    "person.tester": [
+      { s: "not_home", a: { latitude: 50.06, longitude: 14.41 }, lu: tsBase },
+      { s: "not_home", a: { latitude: 50.065, longitude: 14.42 }, lu: tsBase + 60 },
+      { s: "home", a: { latitude: 50.0755, longitude: 14.4378 }, lu: tsBase + 120 },
+    ],
+  },
+});
+await tick(100);
+const strokes = [...root.querySelectorAll(".leaflet-overlay-pane path")].map((p) =>
+  p.getAttribute("stroke")
+);
+ok("line color override applied", strokes.includes("#ff00ff"));
+const squares = root.querySelectorAll(".mmc-trail-square");
+ok("square point style rendered", squares.length === 3);
+ok(
+  "square uses point color",
+  !!squares[0] && squares[0].getAttribute("style").includes("background:#00ff00")
+);
+ok(
+  "marker dot uses entity color",
+  root.querySelector(".mmc-dot")?.getAttribute("style")?.includes("background:#123abc") ?? false
+);
+
+// --- point type "none" hides dots, keeps polyline
+el.setConfig({
+  type: "custom:mapy-map-card",
+  api_key: "K",
+  entities: ["person.tester"],
+  hours_to_show: 24,
+  history_point_type: "none",
+});
+await tick(100);
+lastHistoryCb?.({
+  states: {
+    "person.tester": [
+      { s: "not_home", a: { latitude: 50.06, longitude: 14.41 }, lu: tsBase },
+      { s: "home", a: { latitude: 50.0755, longitude: 14.4378 }, lu: tsBase + 60 },
+    ],
+  },
+});
+await tick(100);
+interactivePaths = root.querySelectorAll(".leaflet-overlay-pane path.leaflet-interactive");
+// only the zone circle remains interactive
+ok("point type none hides dots", interactivePaths.length === 1);
 
 // --- missing key error path
 el.setConfig({ type: "custom:mapy-map-card", entities: [] });
@@ -152,6 +223,7 @@ if (titleInput) {
 }
 ok("editor emits config-changed with title", cfgFromEditor?.title === "Moje mapa");
 ok("editor textarea fallback renders", !!editor.shadowRoot.querySelector("textarea"));
+ok("editor shows entity colors section", !!editor.shadowRoot.querySelector('input[type="color"]'));
 
 console.log(results.join("\n"));
 console.log(errors.length ? "\nJS ERRORS:\n" + errors.join("\n") : "\nno js errors");

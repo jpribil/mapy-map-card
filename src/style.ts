@@ -102,6 +102,22 @@ ha-card {
     0 0 6px rgba(0, 0, 0, 0.9);
 }
 
+/* --- history trail points --- */
+
+.mmc-trail-square {
+  display: block;
+  width: 8px;
+  height: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+.leaflet-tooltip.mmc-trail-tip {
+  font-size: 11px;
+  padding: 2px 6px;
+  white-space: nowrap;
+}
+
 /* --- dark mode tile filter --- */
 
 .mmc-dark .leaflet-tile-pane {

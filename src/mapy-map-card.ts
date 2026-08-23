@@ -4,15 +4,21 @@ import * as L from "leaflet";
 
 import { cardStyles } from "./style";
 import { subscribeHistoryStream } from "./history";
-import { CardConfig, EntityConfig, HistoryStreamLocation } from "./types";
+import {
+  CardConfig,
+  EntityConfig,
+  HistoryPoint,
+  HistoryPointType,
+  HistoryStreamLocation,
+} from "./types";
 import type { HassState, HomeAssistant } from "./ha";
 import {
-  colorForIndex,
   entityPosition,
   friendlyName,
   getLocationEntities,
   isDarkMode,
   normalizeEntities,
+  resolveEntityColor,
 } from "./utils";
 import { parseHistoryStates } from "./history";
 
@@ -40,7 +46,8 @@ export class MapyMapCard extends LitElement {
   private _zoneLayer?: L.LayerGroup;
   private _historyLayer?: L.LayerGroup;
   private _markers = new Map<string, L.Marker>();
-  private _history = new Map<string, [number, number][]>();
+  private _markerColors = new Map<string, string>();
+  private _history = new Map<string, HistoryPoint[]>();
   private _unsubHistory?: Promise<() => void>;
   private _historyStreamDataReceived = false;
   private _historyFallbackTimer?: ReturnType<typeof setTimeout>;
@@ -130,6 +137,7 @@ export class MapyMapCard extends LitElement {
     this._map?.remove();
     this._map = undefined;
     this._markers.clear();
+    this._markerColors.clear();
     super.disconnectedCallback();
   }
 
@@ -316,10 +324,11 @@ export class MapyMapCard extends LitElement {
       if (!pos) return;
       seen.add(cfg.entity);
 
+      const entityColor = resolveEntityColor(this._config, cfg.entity, index);
       let marker = this._markers.get(cfg.entity);
       if (!marker) {
         marker = L.marker([pos.lat, pos.lon], {
-          icon: this._buildIcon(cfg, st, colorForIndex(index)),
+          icon: this._buildIcon(cfg, st, entityColor),
           keyboard: false,
         });
         marker.on("click", () => this._openMoreInfo(cfg.entity));
@@ -331,8 +340,13 @@ export class MapyMapCard extends LitElement {
         });
         marker.addTo(layer);
         this._markers.set(cfg.entity, marker);
+        this._markerColors.set(cfg.entity, entityColor);
       } else {
         marker.setLatLng([pos.lat, pos.lon]);
+        if (this._markerColors.get(cfg.entity) !== entityColor) {
+          this._markerColors.set(cfg.entity, entityColor);
+          marker.setIcon(this._buildIcon(cfg, st, entityColor));
+        }
       }
     });
 
@@ -341,6 +355,7 @@ export class MapyMapCard extends LitElement {
         layer.removeLayer(marker);
         marker.remove();
         this._markers.delete(entityId);
+        this._markerColors.delete(entityId);
       }
     }
   }
@@ -509,8 +524,14 @@ export class MapyMapCard extends LitElement {
       if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
       const points = this._history.get(loc.entity_id) ?? [];
       const last = points[points.length - 1];
-      if (!last || last[0] !== lat || last[1] !== lon) {
-        points.push([lat, lon]);
+      // same place at the same time -> duplicate; same place later on -> revisit
+      if (
+        !last ||
+        last.lat !== lat ||
+        last.lon !== lon ||
+        (loc.ts !== undefined && last.ts !== loc.ts)
+      ) {
+        points.push({ lat, lon, ts: loc.ts });
         if (points.length > 3000) points.splice(0, points.length - 3000);
         this._history.set(loc.entity_id, points);
       }
@@ -521,17 +542,83 @@ export class MapyMapCard extends LitElement {
   private _renderHistory(): void {
     const layer = this._historyLayer!;
     layer.clearLayers();
+    const cfg = this._config!;
 
-    this._resolvedEntities().forEach((cfg, index) => {
-      const points = this._history.get(cfg.entity);
+    const lineWidth = Math.max(1, Number(cfg.history_line_width ?? 4));
+    const lineOpacity = Math.min(1, Math.max(0.05, Number(cfg.history_line_opacity ?? 0.65)));
+    const pointType: HistoryPointType = cfg.history_point_type ?? "dot";
+
+    this._resolvedEntities().forEach((ent, index) => {
+      const points = this._history.get(ent.entity);
       if (!points || points.length < 2) return;
-      L.polyline(points as L.LatLngExpression[], {
-        color: colorForIndex(index),
-        weight: 4,
-        opacity: 0.65,
-        interactive: false,
-      }).addTo(layer);
+
+      const entityColor = resolveEntityColor(cfg, ent.entity, index);
+      const lineColor = cfg.history_line_color?.trim() || entityColor;
+      const pointColor = cfg.history_point_color?.trim() || entityColor;
+
+      L.polyline(
+        points.map((p) => [p.lat, p.lon] as L.LatLngTuple),
+        { color: lineColor, weight: lineWidth, opacity: lineOpacity, interactive: false }
+      ).addTo(layer);
+
+      if (pointType === "none") return;
+
+      for (const p of points) {
+        let overlay: L.Layer | undefined;
+        if (pointType === "square") {
+          overlay = L.marker([p.lat, p.lon], {
+            icon: L.divIcon({
+              className: "mmc-icon-wrapper",
+              html: `<span class="mmc-trail-square" style="background:${pointColor}"></span>`,
+              iconSize: [8, 8],
+              iconAnchor: [4, 4],
+            }),
+            keyboard: false,
+          });
+        } else if (pointType === "ring") {
+          overlay = L.circleMarker([p.lat, p.lon], {
+            radius: 4,
+            color: pointColor,
+            weight: 2,
+            fill: false,
+            opacity: 1,
+          });
+        } else {
+          overlay = L.circleMarker([p.lat, p.lon], {
+            radius: 3.5,
+            color: "#ffffff",
+            weight: 1,
+            fillColor: pointColor,
+            fillOpacity: 1,
+            opacity: 1,
+          });
+        }
+
+        if (p.ts !== undefined) {
+          overlay.bindTooltip(this._formatTs(p.ts), {
+            direction: "top",
+            offset: pointType === "square" ? [0, -6] : [0, -4],
+            className: "mmc-trail-tip",
+          });
+        }
+        overlay.addTo(layer);
+      }
     });
+  }
+
+  private _formatTs(ms: number): string {
+    try {
+      const locale =
+        (this.hass as any)?.locale?.language ||
+        (typeof navigator !== "undefined" ? navigator.language : "") ||
+        "en";
+      return new Intl.DateTimeFormat(locale, {
+        dateStyle: "medium",
+        timeStyle: "medium",
+      }).format(new Date(ms));
+    } catch {
+      return new Date(ms).toLocaleString();
+    }
   }
 
   // ------------------------------------------------------------ fit bounds

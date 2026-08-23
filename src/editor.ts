@@ -1,9 +1,9 @@
 import { LitElement, html, TemplateResult, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
-import { CardConfig, EntityConfig, EntityConfigOrString, TileStyle } from "./types";
+import { CardConfig, EntityConfig, EntityConfigOrString, HistoryPointType, TileStyle } from "./types";
 import type { HomeAssistant } from "./ha";
-import { normalizeEntities } from "./utils";
+import { normalizeEntities, resolveEntityColor } from "./utils";
 
 let pickerPromise: Promise<boolean> | null = null;
 
@@ -104,6 +104,24 @@ export class MapyMapCardEditor extends LitElement {
           gap: 8px !important;
           font-size: 14px !important;
           color: var(--primary-text-color, #000) !important;
+        }
+        input[type="color"] {
+          width: 100%;
+          height: 34px;
+          padding: 2px;
+          border: 1px solid var(--divider-color, #ccc);
+          border-radius: 4px;
+          background: var(--card-background-color, #fff);
+          cursor: pointer;
+        }
+        .section {
+          grid-column: 1 / -1;
+          margin-top: 6px;
+          font-size: 13px;
+          font-weight: 600;
+          color: var(--primary-text-color, #000);
+          border-bottom: 1px solid var(--divider-color, #ddd);
+          padding-bottom: 4px;
         }
         .entity-row {
           display: flex;
@@ -238,6 +256,72 @@ export class MapyMapCardEditor extends LitElement {
           Auto-fit bounds
         </label>
 
+        <div class="section">History trail</div>
+
+        <label>
+          Line width (px)
+          <input
+            type="number"
+            min="1"
+            max="20"
+            .value=${String(cfg.history_line_width ?? 4)}
+            @input=${(e: InputEvent) =>
+              this._patch({ history_line_width: Number((e.target as HTMLInputElement).value) })}
+          />
+        </label>
+
+        <label>
+          Line opacity (0.1 – 1)
+          <input
+            type="number"
+            min="0.1"
+            max="1"
+            step="0.05"
+            .value=${String(cfg.history_line_opacity ?? 0.65)}
+            @input=${(e: InputEvent) =>
+              this._patch({ history_line_opacity: Number((e.target as HTMLInputElement).value) || undefined })}
+          />
+        </label>
+
+        <label>
+          Line color (empty = entity color)
+          <input
+            type="text"
+            placeholder="#ff9800"
+            .value=${cfg.history_line_color ?? ""}
+            @input=${(e: InputEvent) =>
+              this._patch({ history_line_color: (e.target as HTMLInputElement).value.trim() || undefined })}
+          />
+        </label>
+
+        <label>
+          Point style
+          <select
+            @change=${(e: Event) =>
+              this._patch({
+                history_point_type: (e.target as HTMLSelectElement).value as HistoryPointType,
+              })}
+          >
+            ${(["dot", "ring", "square", "none"] as HistoryPointType[]).map(
+              (t) => html`<option value=${t} ?selected=${(cfg.history_point_type ?? "dot") === t}>${t}</option>`
+            )}
+          </select>
+        </label>
+
+        <label>
+          Point color (empty = entity color)
+          <input
+            type="text"
+            placeholder="#ff9800"
+            .value=${cfg.history_point_color ?? ""}
+            @input=${(e: InputEvent) =>
+              this._patch({ history_point_color: (e.target as HTMLInputElement).value.trim() || undefined })}
+          />
+        </label>
+
+        <div class="section">Entity colors</div>
+        ${this._renderEntityColors()}
+
         ${this._pickerReady ? this._renderEntityPickers() : this._renderEntityTextarea()}
 
         <div class="hint">
@@ -304,6 +388,44 @@ export class MapyMapCardEditor extends LitElement {
         ></textarea>
       </label>
     `;
+  }
+
+  private _renderEntityColors(): TemplateResult {
+    const entities = normalizeEntities(this._config.entities ?? []);
+    if (!entities.length) {
+      return html`<div class="hint">Add entities first to assign custom colors.</div>`;
+    }
+    return html`
+      ${entities.map(
+        (ent: EntityConfig, i: number) => html`
+          <label>
+            ${ent.entity}
+            <div class="entity-row" style="grid-column:auto">
+              <input
+                type="color"
+                .value=${resolveEntityColor(this._config, ent.entity, i)}
+                @input=${(e: InputEvent) =>
+                  this._setEntityColor(ent.entity, (e.target as HTMLInputElement).value)}
+              />
+              <button
+                class="remove"
+                title="Reset to automatic color"
+                @click=${() => this._setEntityColor(ent.entity, undefined)}
+              >
+                ↺
+              </button>
+            </div>
+          </label>
+        `
+      )}
+    `;
+  }
+
+  private _setEntityColor(entityId: string, color?: string): void {
+    const colors = { ...(this._config.entity_colors ?? {}) };
+    if (color) colors[entityId] = color;
+    else delete colors[entityId];
+    this._patch({ entity_colors: Object.keys(colors).length ? colors : undefined });
   }
 
   private _patch(patch: Partial<CardConfig>): void {

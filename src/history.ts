@@ -48,7 +48,8 @@ export async function subscribeHistoryStream(
 /**
  * Convert the `{[entity_id]: [{s, a, lu}, ...]}` shape used by both
  * `history/stream` and `history/history_during_period` into the internal
- * location list.
+ * location list. `lu` is a UNIX timestamp whose unit depends on the API
+ * version (µs / ms / s) – normalized to milliseconds here.
  */
 export function parseHistoryStates(
   states: Record<string, Array<Record<string, any>>>,
@@ -63,12 +64,24 @@ export function parseHistoryStates(
       const attrs = item.a ?? item.attributes ?? null;
       const lat = Number(attrs?.latitude);
       const lon = Number(attrs?.longitude);
+      const ts = luToMs(item.lu);
       out.push({
         entity_id: entityId,
         map_state:
           Number.isFinite(lat) && Number.isFinite(lon) ? ([lat, lon] as [number, number]) : null,
+        ts,
       });
     }
   }
   return out;
+}
+
+/** Normalize HA `lu` timestamps (µs | ms | s since epoch) to milliseconds. */
+function luToMs(lu: unknown): number | undefined {
+  const n = Number(lu);
+  if (!Number.isFinite(n) || n <= 0) return undefined;
+  if (n > 1e15) return n / 1000; // microseconds
+  if (n > 1e12) return n; // milliseconds
+  if (n > 1e9) return n * 1000; // seconds
+  return undefined;
 }

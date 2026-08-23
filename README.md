@@ -65,6 +65,12 @@ resources:
 | `default_zoom` | number | `14` | Zoom for a single position / max zoom when fitting bounds |
 | `fit_bounds` | bool | `true` | Automatically fit the viewport to all points |
 | `title` | string | – | Card title |
+| `entity_colors` | map | – | Per-entity color override, e.g. `person.joe: "#e53935"`. Applies to the position marker and its history trail |
+| `history_line_width` | number | `4` | History trail line width in px |
+| `history_line_opacity` | number | `0.65` | History trail line opacity (0.1–1) |
+| `history_line_color` | color | entity color | Fixed trail line color for all entities |
+| `history_point_color` | color | entity color | Fixed trail point color for all entities |
+| `history_point_type` | `dot`/`ring`/`square`/`none` | `dot` | Style of the trail points; hovering a point shows its date & time |
 | `tile_url` | string | – | Advanced: custom `{z}/{x}/{y}` tile URL template (overrides Mapy.com) |
 | `tile_attribution` | string | – | Custom attribution for custom tiles |
 
@@ -93,6 +99,22 @@ entities:
     name: Tom
   - person.jana
 show_zones: true
+```
+
+Custom trail styling with per-entity colors:
+
+```yaml
+type: custom:mapy-map-card
+api_key: YOUR_API_KEY
+hours_to_show: 24
+entity_colors:
+  person.tomas: "#1e88e5"
+  person.jana: "#e53935"
+history_line_width: 5
+history_line_opacity: 0.8
+# history_line_color: "#ff9800"   # one line color for everyone
+# history_point_color: "#ff9800"  # one point color for everyone
+history_point_type: dot           # dot | ring | square | none
 ```
 
 ## Notes
