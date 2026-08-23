@@ -102,15 +102,17 @@ ok(
   root?.querySelector(".leaflet-control-attribution")?.textContent.includes("Mapy.com")
 );
 
-// --- history trail arrives via websocket callback
+// --- history trail arrives via websocket callback (`history/stream` shape)
 lastHistoryCb?.({
-  locations: [
-    { entity_id: "person.tester", map_state: [50.06, 14.41] },
-    { entity_id: "person.tester", map_state: [50.065, 14.42] },
-    { entity_id: "person.tester", map_state: [50.07, 14.43] },
-    { entity_id: "person.tester", map_state: [50.0755, 14.4378] },
-    { entity_id: "person.mobile", map_state: null },
-  ],
+  states: {
+    "person.tester": [
+      { s: "not_home", a: { latitude: 50.06, longitude: 14.41 }, lu: 1 },
+      { s: "not_home", a: { latitude: 50.065, longitude: 14.42 }, lu: 2 },
+      { s: "not_home", a: { latitude: 50.07, longitude: 14.43 }, lu: 3 },
+      { s: "home", a: { latitude: 50.0755, longitude: 14.4378 }, lu: 4 },
+    ],
+    "person.mobile": [{ s: "work", a: {}, lu: 1 }],
+  },
 });
 await tick(100);
 const overlayPaths = root.querySelectorAll(".leaflet-overlay-pane path").length;

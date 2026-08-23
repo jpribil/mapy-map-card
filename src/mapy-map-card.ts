@@ -13,8 +13,8 @@ import {
   getLocationEntities,
   isDarkMode,
   normalizeEntities,
-  parseHistoryDuringPeriod,
 } from "./utils";
+import { parseHistoryStates } from "./history";
 
 const TILE_MAX_NATIVE_ZOOM: Record<string, number> = {
   basic: 19,
@@ -485,7 +485,10 @@ export class MapyMapCard extends LitElement {
           significant_changes_only: true,
         })
         .then((data: unknown) => {
-          const locations = parseHistoryDuringPeriod(data as Record<string, unknown>, entityIds);
+          const locations = parseHistoryStates(
+            data as Record<string, Array<Record<string, any>>>,
+            entityIds
+          );
           if (locations.length > 0) {
             this._onHistoryLocations(locations);
             this._historyStreamDataReceived = true;
@@ -570,13 +573,16 @@ export class MapyMapCard extends LitElement {
     if (key === this._appliedFitKey) return;
     this._appliedFitKey = key;
 
-    if (bounds.getNorthEast().equals(bounds.getSouthWest())) {
-      this._map.setView(bounds.getCenter(), this._config!.default_zoom ?? 14);
+    const maxZoom = this._config!.default_zoom ?? 19;
+    const center = bounds.getCenter();
+    const ne = bounds.getNorthEast();
+    const sw = bounds.getSouthWest();
+    // all points at (roughly) the same spot -> zoom in as far as possible
+    const coLocated = ne.distanceTo(sw) < 50;
+    if (coLocated) {
+      this._map.setView(center, maxZoom);
     } else {
-      this._map.fitBounds(bounds, {
-        padding: [48, 48],
-        maxZoom: this._config!.default_zoom ?? 16,
-      });
+      this._map.fitBounds(bounds, { padding: [48, 48], maxZoom });
     }
   }
 }
